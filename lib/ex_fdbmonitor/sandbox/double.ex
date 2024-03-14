@@ -31,7 +31,7 @@ defmodule ExFdbmonitor.Sandbox.Double do
         conf: [
           data_dir: "#{root_dir}/#{name}.#{x}/data",
           log_dir: "#{root_dir}/#{name}.#{x}/log",
-          fdbserver_ports: for(pidx <- 0..m, do: starting_port + (x * n + pidx))
+          fdbserver_ports: for(pidx <- 0..m-1, do: starting_port + (x * n + pidx))
         ],
         fdbcli: if(x == 0, do: ~w[configure new single ssd tenant_mode=required_experimental]),
         fdbcli: if(x == 2, do: ~w[configure double]),
