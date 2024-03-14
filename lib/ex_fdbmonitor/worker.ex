@@ -69,7 +69,8 @@ defmodule ExFdbmonitor.Worker do
     cluster_file =
       case bootstrap_config[:cluster] do
         :autojoin ->
-          :ok = ExFdbmonitor.autojoin!(:erlang.nodes())
+          nodes = Application.get_env(:ex_fdbmonitor, :nodes, :erlang.nodes())
+          :ok = ExFdbmonitor.autojoin!(nodes)
           ExFdbmonitor.Cluster.file()
 
         cluster_assigns when is_list(cluster_assigns) ->

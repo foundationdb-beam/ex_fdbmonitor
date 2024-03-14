@@ -1,5 +1,5 @@
-{_, 0} = System.cmd("epmd", ["-daemon"])
+alias ExFdbmonitor.Sandbox
 
-:ok = LocalCluster.start()
+Sandbox.start()
 
 ExUnit.start()

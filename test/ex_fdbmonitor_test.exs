@@ -2,82 +2,32 @@ defmodule ExFdbmonitor.Integration.Case do
   @moduledoc false
   use ExUnit.CaseTemplate
 
+  alias ExFdbmonitor.Sandbox
+  alias ExFdbmonitor.Sandbox.Double
+
   setup do
-    n = 3
-
-    nodes =
-      LocalCluster.start_nodes("ex-fdbmonitor-integration", n, applications: [], environment: [])
-
-    nodes = List.zip([Enum.to_list(1..n), nodes])
-
-    env_fn = fn x ->
-      [
-        bootstrap: [
-          cluster:
-            if(x > 1,
-              do: :autojoin,
-              else: [
-                coordinator_addr: "127.0.0.1"
-              ]
-            ),
-          conf: [
-            data_dir: ".ex_fdbmonitor/#{x}/data",
-            log_dir: ".ex_fdbmonitor/#{x}/log",
-            fdbserver_ports: [5000 + x]
-          ],
-          fdbcli: if(x == 1, do: ~w[configure new single ssd tenant_mode=required_experimental]),
-          fdbcli: if(x == 3, do: ~w[configure double]),
-          fdbcli: if(x == 3, do: ~w[coordinators auto])
-        ],
-        etc_dir: ".ex_fdbmonitor/#{x}/etc",
-        run_dir: ".ex_fdbmonitor/#{x}/run"
-      ]
-    end
-
-    Enum.map(
-      nodes,
-      fn {idx, node} ->
-        :ok = :rpc.call(node, Application, :load, [:ex_fdbmonitor])
-
-        for {k, v} <- env_fn.(idx) do
-          :ok = :rpc.call(node, Application, :put_env, [:ex_fdbmonitor, k, v])
-        end
-
-        {:ok, _} = :rpc.call(node, Application, :ensure_all_started, [:ex_fdbmonitor])
-      end
-    )
+    sandbox = Double.checkout("ex-fdbmonitor-integration")
 
     on_exit(fn ->
-      :ok = LocalCluster.stop()
-
-      Enum.map(nodes, fn {idx, _node} ->
-        env = env_fn.(idx)
-        etc_dir = env[:etc_dir]
-        run_dir = env[:run_dir]
-        data_dir = env[:bootstrap][:conf][:data_dir]
-        log_dir = env[:bootstrap][:conf][:log_dir]
-
-        for dir <- [etc_dir, run_dir, data_dir, log_dir] do
-          File.rm_rf!(dir)
-        end
-      end)
+      Double.checkin(sandbox, drop?: true)
     end)
 
-    [nodes: nodes]
+    [nodes: Sandbox.nodes(sandbox), sandbox: sandbox]
   end
 end
 
 defmodule ExFdbmonitorTest do
+  alias ExFdbmonitor.Sandbox
   use ExFdbmonitor.Integration.Case
   doctest ExFdbmonitor
 
   @tag timeout: :infinity
   test "making a cluster of three", context do
-    [{1, node1}, {2, node2}, {3, node3}] = context[:nodes]
+    [node1, node2, node3] = context[:nodes]
 
     [db1, db2, db3] =
       for node <- [node1, node2, node3] do
-        cluster_file = :rpc.call(node, ExFdbmonitor.Cluster, :file, [])
+        cluster_file = Sandbox.cluster_file(node)
         :erlfdb.open(cluster_file)
       end
 
