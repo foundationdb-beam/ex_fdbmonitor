@@ -64,7 +64,7 @@ defmodule ExFdbmonitor.Worker do
   defp bootstrap!(starter, bootstrap_config, run_config) do
     etc_dir = run_config[:etc_dir]
 
-    fdbserver_ports = bootstrap_config[:conf][:fdbserver_ports]
+    fdbservers = bootstrap_config[:conf][:fdbservers]
 
     cluster_file =
       case bootstrap_config[:cluster] do
@@ -74,7 +74,9 @@ defmodule ExFdbmonitor.Worker do
           ExFdbmonitor.Cluster.file()
 
         cluster_assigns when is_list(cluster_assigns) ->
-          cluster_assigns = Keyword.merge(cluster_assigns, coordinator_port: hd(fdbserver_ports))
+          cluster_assigns =
+            Keyword.merge(cluster_assigns, coordinator_port: hd(fdbservers)[:port])
+
           ExFdbmonitor.Cluster.write!(etc_dir, cluster_assigns)
       end
 

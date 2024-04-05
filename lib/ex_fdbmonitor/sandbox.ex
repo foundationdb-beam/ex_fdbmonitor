@@ -3,6 +3,7 @@ defmodule ExFdbmonitor.Sandbox do
     defstruct [:idx, :node, :etc_dir, :data_dir, :run_dir, :log_dir]
   end
 
+  alias ExFdbmonitor.Cluster
   alias ExFdbmonitor.Sandbox.Node
 
   def start() do
@@ -19,12 +20,18 @@ defmodule ExFdbmonitor.Sandbox do
     for %Node{node: node} <- context[:nodes], do: node
   end
 
+  def cluster_file(name, idx) do
+    etc_dir(name, idx)
+    |> Path.expand()
+    |> Cluster.file()
+  end
+
   def cluster_file(node) when is_atom(node) do
     rpc!(%Node{node: node}, ExFdbmonitor.Cluster, :file, [])
   end
 
   def cluster_file(context) do
-    [%Node{node: node} | _] = context[:nodes]
+    [node | _] = context[:nodes]
     # Sandbox always uses nodes on the local machine, so this is guaranteed
     # to return a file on the same filesystem as the calling node
     rpc!(node, ExFdbmonitor.Cluster, :file, [])
@@ -66,6 +73,22 @@ defmodule ExFdbmonitor.Sandbox do
     end
 
     :ok
+  end
+
+  def etc_dir(name, idx) do
+    ".ex_fdbmonitor/#{name}.#{idx}/etc"
+  end
+
+  def run_dir(name, idx) do
+    ".ex_fdbmonitor/#{name}.#{idx}/run"
+  end
+
+  def data_dir(name, idx) do
+    ".ex_fdbmonitor/#{name}.#{idx}/data"
+  end
+
+  def log_dir(name, idx) do
+    ".ex_fdbmonitor/#{name}.#{idx}/log"
   end
 
   def build_context(nodes, number, fdbmonitor_config) do
