@@ -8,7 +8,9 @@ config :ex_fdbmonitor,
     conf: [
       data_dir: ".ex_fdbmonitor/dev/data",
       log_dir: ".ex_fdbmonitor/dev/log",
-      fdbserver_ports: [5000]
+      fdbservers: [
+        [port: 5000]
+      ]
     ],
     fdbcli: ~w[configure new single ssd tenant_mode=required_experimental]
   ]

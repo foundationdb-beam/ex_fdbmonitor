@@ -14,10 +14,9 @@ defmodule ExFdbmonitor.Sandbox.Single do
   end
 
   defp config(x, _node, name, options) do
-    n = Keyword.get(options, :nodes, @default_n)
     m = Keyword.get(options, :processes, 1)
     starting_port = Keyword.get(options, :starting_port, 5000)
-    root_dir = Keyword.get(options, :root_dir, ".ex_fdbmonitor")
+    conf_assigns = Keyword.get(options, :conf_assigns, [])
 
     [
       bootstrap: [
@@ -28,16 +27,20 @@ defmodule ExFdbmonitor.Sandbox.Single do
               coordinator_addr: "127.0.0.1"
             ]
           ),
-        conf: [
-          data_dir: "#{root_dir}/#{name}.#{x}/data",
-          log_dir: "#{root_dir}/#{name}.#{x}/log",
-          fdbserver_ports: for(pidx <- 0..m-1, do: starting_port + (x * n + pidx))
-        ],
+        conf:
+          Keyword.merge(
+            [
+              data_dir: Sandbox.data_dir(name, x),
+              log_dir: Sandbox.log_dir(name, x),
+              fdbservers: for(pidx <- 0..(m - 1), do: [port: starting_port + (x * m + pidx)])
+            ],
+            conf_assigns
+          ),
         fdbcli: if(x == 0, do: ~w[configure new single ssd tenant_mode=required_experimental]),
         fdbcli: if(x == 0, do: ~w[coordinators auto])
       ],
-      etc_dir: ".ex_fdbmonitor/#{name}.#{x}/etc",
-      run_dir: ".ex_fdbmonitor/#{name}.#{x}/run"
+      etc_dir: Sandbox.etc_dir(name, x),
+      run_dir: Sandbox.run_dir(name, x)
     ]
   end
 end
