@@ -36,7 +36,8 @@ defmodule ExFdbmonitor.Sandbox.Double do
             ],
             conf_assigns
           ),
-        fdbcli: if(x == 0, do: ~w[configure new single ssd tenant_mode=required_experimental]),
+        fdbcli:
+          if(x == 0, do: ~w[configure new single ssd-redwood-1 tenant_mode=required_experimental]),
         fdbcli: if(x == 2, do: ~w[configure double]),
         fdbcli: if(x == 2, do: ~w[coordinators auto])
       ],

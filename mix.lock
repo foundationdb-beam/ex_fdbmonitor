@@ -1,6 +1,6 @@
 %{
   "erlexec": {:hex, :erlexec, "2.0.3", "61d5eee44a514236e6bc779729010467a990f2dc9bda2373c4d1b2c0a11b2bc8", [:rebar3], [], "hexpm", "e6e364bd4cbed2a7862f4dcfcfa9f2a50eaf4f7937e261cf2e326ee3a9ab0f9a"},
-  "erlfdb": {:git, "https://github.com/foundationdb-beam/erlfdb.git", "e2d1eb41d9987e3ef028f02b0f09cbc09ab81ced", [branch: "main"]},
+  "erlfdb": {:hex, :erlfdb, "0.1.0", "1ef7958a5c42f695bf40bed3ef20d6083dbedaf07347226c6753aa7c06c9ec61", [:rebar3], [], "hexpm", "b05c0aba2877293c516c5be043d757e9e97dd90e72879d6886154deac7bc81a6"},
   "global_flags": {:hex, :global_flags, "1.0.0", "ee6b864979a1fb38d1fbc67838565644baf632212bce864adca21042df036433", [:rebar3], [], "hexpm", "85d944cecd0f8f96b20ce70b5b16ebccedfcd25e744376b131e89ce61ba93176"},
   "local_cluster": {:hex, :local_cluster, "1.2.1", "8eab3b8a387680f0872eacfb1a8bd5a91cb1d4d61256eec6a655b07ac7030c73", [:mix], [{:global_flags, "~> 1.0", [hex: :global_flags, repo: "hexpm", optional: false]}], "hexpm", "aae80c9bc92c911cb0be085fdeea2a9f5b88f81b6bec2ff1fec244bb0acc232c"},
 }
