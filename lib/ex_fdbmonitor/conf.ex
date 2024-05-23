@@ -23,7 +23,9 @@ defmodule ExFdbmonitor.Conf do
             class: nil,
             machine_id: Base.encode16(:crypto.strong_rand_bytes(4)),
             data_hall: nil,
-            datacenter_id: nil
+            datacenter_id: nil,
+            backup: nil,
+            dr: nil
           ],
           assigns
         )

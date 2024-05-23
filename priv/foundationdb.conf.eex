@@ -41,12 +41,14 @@ logdir = <%= @log_dir %>
 <%= unless is_nil(fdbserver_config[:class]), do: "class = #{fdbserver_config[:class]}" %>
 
 <% end %>
+<%= unless is_nil(@backup) do %>
 [backup_agent]
 command = <%= @backup_agent %>
 cluster-file = <%= @cluster_file %>
 logdir = <%= @log_dir %>
 
 [backup_agent.1]
+<% end %>
 
 <%= unless is_nil(@dr) do %>
 [dr_agent]
@@ -56,4 +58,4 @@ source = <%= if :self == @dr[:source], do: @cluster_file, else: @dr[:source] %>
 destination = <%= if :self == @dr[:destination], do: @cluster_file, else: @dr[:destination] %>
 
 [dr_agent.2]
-<%= end %>
+<% end %>
