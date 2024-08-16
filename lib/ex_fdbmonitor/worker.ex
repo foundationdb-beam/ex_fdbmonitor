@@ -46,7 +46,7 @@ defmodule ExFdbmonitor.Worker do
     end
   end
 
-  defp bootstrap_safe?(_conffile, {:error, _}), do: false
+  defp bootstrap_safe?(_conffile, :error), do: false
 
   defp bootstrap_safe?(conffile, {:ok, bootstrap_config}) do
     data_dir = Path.expand(bootstrap_config[:conf][:data_dir])
