@@ -52,13 +52,13 @@ import_config "#{config_env()}.exs"
 
 ### Add `:ecto_foundationdb` and `:ex_fdbmonitor` deps
 
-**TODO: Replace with hex packages**
+**TODO: Replace with hex package**
 
 ```elixir
   # mix.exs
   defp deps do
   [
-    {:ecto_foundationdb, git: "https://github.com/foundationdb-beam/ecto_foundationdb.git", branch: "main"},
+    {:ecto_foundationdb, "~> 0.1"},
     {:ex_fdbmonitor, git: "https://github.com/foundationdb-beam/ex_fdbmonitor.git", branch: "main", only: :dev}
   ]
   end
