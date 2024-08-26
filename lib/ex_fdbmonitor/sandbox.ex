@@ -41,8 +41,12 @@ defmodule ExFdbmonitor.Sandbox do
     environment = Keyword.get(options, :config, [])
     applications = Keyword.get(options, :applications, [:ex_fdbmonitor])
 
-    node_names =
-      LocalCluster.start_nodes(name, number, applications: [], environment: [])
+    {:ok, cluster} =
+      LocalCluster.start_link(number, prefix: name, applications: [], environment: [])
+
+    Process.unlink(cluster)
+
+    {:ok, node_names} = LocalCluster.nodes(cluster)
 
     nodes = build_context(node_names, number, environment[:ex_fdbmonitor])
 
@@ -50,14 +54,15 @@ defmodule ExFdbmonitor.Sandbox do
 
     ensure_all_started(nodes, applications)
 
-    [nodes: nodes]
+    [cluster: cluster, nodes: nodes]
   end
 
   def checkin(context, options \\ []) do
     nodes = Keyword.get(context, :nodes, [])
     drop? = Keyword.get(options, :drop?, false)
+    cluster = Keyword.get(context, :cluster)
 
-    :ok = LocalCluster.stop_nodes(for %Node{node: node} <- nodes, do: node)
+    :ok = LocalCluster.stop(cluster)
 
     if drop? do
       Enum.map(nodes, fn %Node{
