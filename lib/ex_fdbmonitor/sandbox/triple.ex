@@ -1,7 +1,7 @@
-defmodule ExFdbmonitor.Sandbox.Double do
+defmodule ExFdbmonitor.Sandbox.Triple do
   alias ExFdbmonitor.Sandbox
 
-  @default_n 3
+  @default_n 6
 
   def checkout(name, options \\ []) do
     n = Keyword.get(options, :nodes, @default_n)
@@ -38,8 +38,8 @@ defmodule ExFdbmonitor.Sandbox.Double do
           ),
         fdbcli:
           if(x == 0, do: ~w[configure new single ssd-redwood-1 tenant_mode=optional_experimental]),
-        fdbcli: if(x == 2, do: ~w[configure double]),
-        fdbcli: if(x == 2, do: ~w[coordinators auto])
+        fdbcli: if(x == 5, do: ~w[configure triple]),
+        fdbcli: if(x == 5, do: ~w[coordinators auto])
       ],
       etc_dir: Sandbox.etc_dir(name, x),
       run_dir: Sandbox.run_dir(name, x)
