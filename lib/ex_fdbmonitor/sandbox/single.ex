@@ -37,7 +37,7 @@ defmodule ExFdbmonitor.Sandbox.Single do
             conf_assigns
           ),
         fdbcli:
-          if(x == 0, do: ~w[configure new single ssd-redwood-1 tenant_mode=required_experimental]),
+          if(x == 0, do: ~w[configure new single ssd-redwood-1 tenant_mode=optional_experimental]),
         fdbcli: if(x == 0, do: ~w[coordinators auto])
       ],
       etc_dir: Sandbox.etc_dir(name, x),
