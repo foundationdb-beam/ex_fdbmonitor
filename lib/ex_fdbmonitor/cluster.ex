@@ -6,6 +6,10 @@ defmodule ExFdbmonitor.Cluster do
     file(Application.fetch_env!(:ex_fdbmonitor, :etc_dir))
   end
 
+  def open_db() do
+    :erlfdb.open(file())
+  end
+
   def read!() do
     File.read!(file())
   end
