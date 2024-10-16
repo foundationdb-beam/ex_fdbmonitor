@@ -1,5 +1,8 @@
 import Config
 
+config :example_app, MyApp.Repo,
+  open_db: &ExFdbmonitor.Cluster.open_db/0
+
 config :ex_fdbmonitor,
   etc_dir: ".example_app/dev/fdb/etc",
   run_dir: ".example_app/dev/fdb/run"
