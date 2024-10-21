@@ -6,7 +6,7 @@ defmodule ExFdbmonitor.Cluster do
     file(Application.fetch_env!(:ex_fdbmonitor, :etc_dir))
   end
 
-  def open_db() do
+  def open_db(_repo) do
     :erlfdb.open(file())
   end
 
