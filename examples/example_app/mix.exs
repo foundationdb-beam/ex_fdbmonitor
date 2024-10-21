@@ -26,7 +26,7 @@ defmodule ExampleApp.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ecto_foundationdb, "~> 0.1"},
+      {:ecto_foundationdb, "~> 0.3"},
       #{:ex_fdbmonitor, git: "https://github.com/foundationdb-beam/ex_fdbmonitor.git", branch: "main"}
       {:ex_fdbmonitor, path: "../..", only: :dev}
     ]

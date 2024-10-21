@@ -1,7 +1,7 @@
 import Config
 
 config :example_app, MyApp.Repo,
-  open_db: &ExFdbmonitor.Cluster.open_db/0
+  open_db: &ExFdbmonitor.Cluster.open_db/1
 
 config :ex_fdbmonitor,
   etc_dir: ".example_app/dev/fdb/etc",
@@ -19,5 +19,5 @@ config :ex_fdbmonitor,
         [port: 5000]
       ]
     ],
-    fdbcli: ~w[configure new single ssd-redwood-1 tenant_mode=required_experimental]
+    fdbcli: ~w[configure new single ssd-redwood-1]
   ]

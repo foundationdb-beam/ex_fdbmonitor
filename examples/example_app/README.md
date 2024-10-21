@@ -98,8 +98,8 @@ enables tenants, which EctoFDB requires.
 # config/dev.exs
 import Config
 
-config :example_app, MyApp.Repo,
-  open_db: &ExFdbmonitor.Cluster.open_db/0
+config :example_app, ExampleApp.Repo,
+  open_db: &ExFdbmonitor.Cluster.open_db/1
 
 config :ex_fdbmonitor,
   etc_dir: ".example_app/dev/fdb/etc",
@@ -117,7 +117,7 @@ config :ex_fdbmonitor,
         [port: 5000]
       ]
     ],
-    fdbcli: ~w[configure new single ssd-redwood-1 tenant_mode=required_experimental]
+    fdbcli: ~w[configure new single ssd-redwood-1]
   ]
 ```
 
@@ -189,7 +189,7 @@ database that is running on your system in the default location.
 # test.exs
 import Config
 
-config :example_app, ExampleApp.Repo, open_db: &EctoFoundationDB.Sandbox.open_db/0
+config :example_app, ExampleApp.Repo, open_db: &EctoFoundationDB.Sandbox.open_db/1
 ```
 
 #### Set up supporting files
@@ -338,7 +338,7 @@ config :ex_fdbmonitor,
       log_dir: "/var/lib/example_app/data/fdb/log",
       fdbservers: [port: 4500, port: 4501]
     ],
-    fdbcli: if(node_idx == 0, do: ~w[configure new single ssd-redwood-1 tenant_mode=required_experimental]),
+    fdbcli: if(node_idx == 0, do: ~w[configure new single ssd-redwood-1]),
     fdbcli: if(node_idx == 2, do: ~w[configure double]),
     fdbcli: if(node_idx == 2, do: ~w[coordinators auto])
   ]
