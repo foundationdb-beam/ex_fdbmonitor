@@ -1,5 +1,23 @@
 defmodule ExFdbmonitor.Sandbox do
+  @moduledoc """
+  Build a sandbox FoundationDB cluster.
+
+  ## Examples
+
+  ```elixir
+  alias ExFdbmonitor.Sandbox
+
+  Sandbox.start()
+  cluster_file = Sandbox.cluster_file("dev", 0)
+  sandbox = Sandbox.Single.checkout("dev", starting_port: 5050)
+  IO.puts("Cluster file: \#{cluster_file}")
+  _anything = IO.gets("Input anything to stop FDB: ")
+  Sandbox.Single.checkin(sandbox)
+  ```
+  """
+
   defmodule Node do
+    @moduledoc false
     defstruct [:idx, :node, :etc_dir, :data_dir, :run_dir, :log_dir]
   end
 

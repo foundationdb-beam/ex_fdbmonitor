@@ -1,4 +1,6 @@
 defmodule ExFdbmonitor.Cluster do
+  @moduledoc false
+
   @fdb_cluster_eex "fdb.cluster.eex"
   @fdb_cluster "fdb.cluster"
 

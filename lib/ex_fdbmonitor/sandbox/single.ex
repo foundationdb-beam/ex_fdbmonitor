@@ -1,4 +1,7 @@
 defmodule ExFdbmonitor.Sandbox.Single do
+  @moduledoc """
+  This module provides functions for managing single-node FoundationDB sandboxes.
+  """
   alias ExFdbmonitor.Sandbox
 
   @default_n 1
