@@ -23,6 +23,7 @@ the following environment variables. The paths shown here are the defaults.
 
 ```
 config :ex_fdbmonitor,
+       fdbmonitor: "/usr/local/libexec/fdbmonitor",
        fdbcli: "/usr/local/bin/fdbcli",
        fdbserver: "/usr/local/libexec/fdbserver",
        fdbdr: "/usr/local/bin/fdbdr",

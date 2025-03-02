@@ -2,7 +2,8 @@ require Logger
 
 defmodule ExFdbmonitor.Worker do
   @moduledoc false
-  @fdbmonitor "/usr/local/libexec/fdbmonitor"
+  defp fdbmonitor(),
+    do: Application.get_env(:ex_fdbmonitor, :fdbmonitor, "/usr/local/libexec/fdbmonitor")
 
   def child_spec(init_arg) do
     default = %{
@@ -31,7 +32,7 @@ defmodule ExFdbmonitor.Worker do
     File.mkdir_p!(Path.dirname(lockfile))
 
     starter = fn ->
-      cmd = [@fdbmonitor, "--conffile", conffile, "--lockfile", lockfile]
+      cmd = [fdbmonitor(), "--conffile", conffile, "--lockfile", lockfile]
       {:ok, pid, _os_pid} = :exec.run_link(cmd, [])
       {:ok, pid}
     end
