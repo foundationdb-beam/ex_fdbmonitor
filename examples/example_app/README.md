@@ -52,8 +52,6 @@ import_config "#{config_env()}.exs"
 
 ### Add `:ecto_foundationdb` and `:ex_fdbmonitor` deps
 
-**TODO: Replace with hex package**
-
 ```elixir
   # mix.exs
   defp deps do
@@ -90,8 +88,7 @@ databases that are ephemeral and safe to delete at any time.
 #### Configure ex_fdbmonitor
 
 When your app is running with this config, it will start a single fdbserver process
-and it will listen on port 5000. It uses the ssd-redwood-1 storage engine and
-enables tenants, which EctoFDB requires.
+and it will listen on port 5000. It uses the ssd-redwood-1 storage engine.
 
 ```elixir
 # config/dev.exs

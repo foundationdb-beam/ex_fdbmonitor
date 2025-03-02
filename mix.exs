@@ -4,6 +4,7 @@ defmodule ExFdbmonitor.MixProject do
   def project do
     [
       app: :ex_fdbmonitor,
+      description: "A tool for creating FoundationDB clusters",
       version: "0.1.0",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
@@ -11,6 +12,7 @@ defmodule ExFdbmonitor.MixProject do
       aliases: [
         test: "test --no-start"
       ],
+      package: package(),
       docs: docs()
     ]
   end
@@ -34,6 +36,15 @@ defmodule ExFdbmonitor.MixProject do
 
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{
+        "GitHub" => "https://github.com/foundationdb-beam/ex_fdbmonitor"
+      }
     ]
   end
 
