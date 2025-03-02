@@ -1,6 +1,7 @@
 require Logger
 
 defmodule ExFdbmonitor.Worker do
+  @moduledoc false
   @fdbmonitor "/usr/local/libexec/fdbmonitor"
 
   def child_spec(init_arg) do

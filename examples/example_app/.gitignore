@@ -25,4 +25,4 @@ example_app-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 /.example_app/
-/.erlfdb/
+/.erlfdb_sandbox/

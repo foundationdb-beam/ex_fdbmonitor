@@ -5,7 +5,7 @@ development and production along with `ecto_foundationdb`. Together, these two
 dependencies can be a basis for how your application state is managed across different
 environments.
 
-This README contains the list of steps taken to construct this example, so
+This README contains the comprehensive list of steps taken to construct this example, so
 that the reader may follow along with their own application.
 
 ## Guide
@@ -29,7 +29,7 @@ cd example_app
 ```bash
 # .gitignore
 /.example_app/
-/.erlfdb/
+/.erlfdb_sandbox/
 ```
 
 ### Set up application config
@@ -58,8 +58,8 @@ import_config "#{config_env()}.exs"
   # mix.exs
   defp deps do
   [
-    {:ecto_foundationdb, "~> 0.1"},
-    {:ex_fdbmonitor, git: "https://github.com/foundationdb-beam/ex_fdbmonitor.git", branch: "main", only: :dev}
+    {:ecto_foundationdb, "~> 0.4"},
+    {:ex_fdbmonitor, "~> 0.1", only: :dev}
   ]
   end
 ```
@@ -69,24 +69,23 @@ mix deps.get
 mix
 ```
 
-You'll see a warning, which we will address in the next step.
+You'll see a warning, which we'll address in the next step.
 
 ```
-10:14:17.299 [warning] ExFdbmonitor starting without running fdbmonitor. At minimum, you
-should define `:etc_dir` and `:run_dir`, but you should also consider
-adding a `:bootstrap` config.
+10:14:17.299 [warning] ExFdbmonitor starting without running fdbmonitor. At minimum, you should define `:etc_dir` and `:run_dir`, but you should also consider adding a `:bootstrap` config.
 ```
 
 ### For `MIX_ENV=dev`
 
 The dev.exs configuration shown here creates a working directory for FoundationDB
 that is expected to be semi-permanent. That is, this FoundationDB cluster (of 1 node)
-can be kept long term during development of your application.
+can be kept long term during development of your application. It will be in active
+use when you run `iex -S mix`.
 
 You can modify the directories and port(s) according to your needs.
 
-Note: Please don't consider this a "Sandbox". Sandboxes should be reserved for
-clusters that are ephemeral and safe to delete at any time.
+Note: This is not a "Sandbox". Sandboxes should be reserved for
+databases that are ephemeral and safe to delete at any time.
 
 #### Configure ex_fdbmonitor
 
@@ -97,9 +96,6 @@ enables tenants, which EctoFDB requires.
 ```elixir
 # config/dev.exs
 import Config
-
-config :example_app, ExampleApp.Repo,
-  open_db: &ExFdbmonitor.Cluster.open_db/1
 
 config :ex_fdbmonitor,
   etc_dir: ".example_app/dev/fdb/etc",
@@ -147,6 +143,8 @@ fdbcli -C .example_app/dev/fdb/etc/fdb.cluster --exec "status minimal"
 Before setting up `mix test`, let's make sure our app can interact with a database
 via `Ecto`.
 
+Add a repo.ex file:
+
 ```elixir
 # lib/example_app/repo.ex
 defmodule ExampleApp.Repo do
@@ -157,6 +155,17 @@ defmodule ExampleApp.Repo do
   def migrations(), do: []
 end
 ```
+
+Add this section to dev.exs:
+
+```elixir
+# config/dev.exs
+config :example_app, ExampleApp.Repo,
+  open_db: &ExFdbmonitor.open_db/1
+# ...
+```
+
+Start the Repo in your application:
 
 ```elixir
 # lib/example_app/application.ex
@@ -172,13 +181,20 @@ defmodule ExampleApp.Application do
 end
 ```
 
+Your `dev` environment is now ready to use.
+
 ### For `MIX_ENV=test`
 
 In the configuration of `test.exs` we're actually not using `ex_fdbmonitor`, and instead
 using `EctoFoundationDB.Sandbox`. Instead of creating a FoundationDB cluster, this sandbox
 manages a single `fdbserver` process. The port is chosen automatically, and it is not
 necessary for your application to inspect this port. The sandbox will create the directory
-`.erlfdb`. This is not configurable.
+`.erlfdb_sandbox`.
+
+An alternative approach is to use `ExFdbmonitor.Sandbox`, which uses `:local_cluster` to
+start additional BEAM VMs, and allows testing of multiple node configurations. You may
+reference the ExUnit tests for an example of how to do that. Using `EctoFoundationDB.Sandbox`
+is faster and simpler.
 
 #### Configure test.exs
 
@@ -189,7 +205,8 @@ database that is running on your system in the default location.
 # test.exs
 import Config
 
-config :example_app, ExampleApp.Repo, open_db: &EctoFoundationDB.Sandbox.open_db/1
+config :example_app, ExampleApp.Repo,
+  open_db: &EctoFoundationDB.Sandbox.open_db/1
 ```
 
 #### Set up supporting files
@@ -262,13 +279,13 @@ defmodule ExampleAppTest do
 end
 ```
 
-You should now be able to run `mix test` successfully. You can safely delete the `.erlfdb` directory
+You should now be able to run `mix test` successfully. You can safely delete the `.erlfdb_sandbox` directory
 at any time throughout development.
 
 ### For `MIX_ENV=prod`
 
-In production, you have a choice. It's likely that you'll want to host FoundationDB on compute instances that
-are separated from your application (Conventional), but there are other configurations that might be
+In production, you have a choice. It's likely that you'll want to host FoundationDB on infrastructure that
+is separated from your application (Conventional), but there are other configurations that might be
 interesting to you (Radical).
 
 #### Conventional: connect to remote database
@@ -285,10 +302,9 @@ config :example_app, ExampleApp.Repo,
 
 The `:cluster_file` option should identify a file on the filesystem. Your application should have both read
 and write access to this file. The contents of this file are generated by the FoundationDB server and should not
-be changed by hand.
+be changed by hand. If you don't have this file, then you must copy it from the FoundationDB server.
 
-You'll also want to ensure that your compute instance has sufficient network access to the FDB coordinators
-that are listed in the cluster file.
+You also must to ensure that your application instance has sufficient network access to the FDB servers.
 
 #### Radical: application manages its own database cluster
 
@@ -296,32 +312,42 @@ Alternatively, your app's production config can bootstrap its own multi-node Fou
 makes it easy to use the BEAM's clustering capabilities for node discovery. There are a couple reasons why you
 might consider this approach.
 
-1. Your applicatiion needs multi-node ACID transactions, and you don't want the complexity or cost
+1. You simply want a local single-node FDB database, similar to a SQLite deployment.
+2. Your applicatiion needs multi-node ACID transactions, and you don't want the complexity or cost
    associated with hosting a separate database.
-2. You run a deployment of your application that acts as the database and a deployment that acts as the
+3. You run a deployment of your application that acts as the database and a deployment that acts as the
    stateless application. Similar to the approach used by FLAME, you could create a `MIX_ENV=db`
    variant of your app that runs `ex_fdbmonitor` and bootstraps the database, whereas `MIX_ENV=prod`
    simply connects to it.
-3. You create an entirely separate Elixir app that is strictly concerned with running `ex_fdbmonitor`.
+4. You create an entirely separate Elixir app that is strictly concerned with running `ex_fdbmonitor`.
    Once such an application is running, your main application can use the Conventional approach.
 
-In any of these cases, your runtime.config could resemble something like this:
+In any of these cases, your runtime.exs could resemble something like this:
 
 ```elixir
 # config/runtime.exs
 import Config
 
-config :ex_fdbmonitor,
-  etc_dir: "/var/lib/example_app/data/fdb/etc",
-  run_dir: "/var/lib/example_app/data/fdb/run"
+database_path = System.fetch_env!("DATABASE_PATH")
 
-node_idx = Integer.parse(System.fetch_env!("EXAMPLE_APP_NODE_IDX"))
+config :ex_fdbmonitor,
+  etc_dir: Path.join(database_path, "etc"),
+  run_dir: Path.join(database_path, "run")
+
+node_idx = String.to_integer(System.fetch_env!("EXAMPLE_APP_NODE_IDX"))
+node_count = String.to_integer(System.fetch_env!("EXAMPLE_APP_NODE_COUNT"))
+interface = System.get_env("EXAMPLE_APP_COORDINATOR_IF") || "en0"
 
 addr_fn = fn if ->
-  {:ok, addrs} = :inet.getifaddrs()
-  :proplists.get_value(to_charlist(if), addrs)[:addr]
-  |> :inet.ntoa()
-  |> to_string()
+   {:ok, addrs} = :inet.getifaddrs()
+
+   addrs
+   |> then(&:proplists.get_value(~c"#{if}", &1))
+   |> then(&:proplists.get_all_values(:addr, &1))
+   |> Enum.filter(&(tuple_size(&1) == 4))
+   |> hd()
+   |> :inet.ntoa()
+   |> to_string()
 end
 
 config :ex_fdbmonitor,
@@ -330,18 +356,27 @@ config :ex_fdbmonitor,
     if(node_idx > 0,
       do: :autojoin,
       else: [
-        coordinator_addr: addr_fn.("en0")
+        coordinator_addr: addr_fn.(interface)
       ]
     ),
     conf: [
-      data_dir: "/var/lib/example_app/data/fdb/data",
-      log_dir: "/var/lib/example_app/data/fdb/log",
-      fdbservers: [port: 4500, port: 4501]
+      data_dir: Path.join(database_path, "data"),
+      log_dir: Path.join(database_path, "log"),
+      fdbservers: [[port: 4500], [port: 4501]]
     ],
     fdbcli: if(node_idx == 0, do: ~w[configure new single ssd-redwood-1]),
     fdbcli: if(node_idx == 2, do: ~w[configure double]),
-    fdbcli: if(node_idx == 2, do: ~w[coordinators auto])
+    fdbcli: if(node_idx == node_count - 1, do: ~w[coordinators auto])
   ]
+```
+
+and prod.exs:
+
+```elixir
+# config/prod.exs
+config :livesecret, LiveSecret.Repo,
+  open_db: &ExFdbmonitor.open_db/1
+# ...
 ```
 
 Keep in mind that `:erlang.nodes()` is used to detect nodes that any given node can join to in
@@ -349,10 +384,12 @@ order to form the cluster on first boot. So your nodes must be able to reach eac
 
 On first bring-up, nodes should be started individually and serially.
 
-Once a given node has been started, the `bootstrap` config, will be ignored on all subsequent restarts.
+Once a given node has been started, the `bootstrap` config, will be ignored on all subsequent restarts,
+in which `:etc_dir` and `:run_dir` are used.
 
-The example config above uses a per-node index value to control the sequence of commands in the bootstrap.
-Feel free to use some other piece of data convenient to your deployment procedure.
+The example config above uses a per-node index value to control the sequence of commands in the bootstrap,
+and assumes the nodes will start in the correct order. Feel free to use some other piece of data convenient
+to your deployment procedure.
 
 ### Schemas and Migrations
 
@@ -368,7 +405,6 @@ Defines a struct your app stores in the database.
 # lib/example_app/temperature_event.ex
 defmodule ExampleApp.TemperatureEvent do
   use Ecto.Schema
-  @schema_context usetenant: true
   @primary_key {:id, :binary_id, autogenerate: true}
 
   schema "temperature_events" do
@@ -383,6 +419,7 @@ end
 #### Indexes
 
 Defines the fields that can be used to efficiently access your data.
+Remember: all `EctoFoundationDB.Migration` modules must be included in your application release.
 
 ```elixir
 # lib/example_app/migrations/temperature_event_indexes.ex
@@ -402,12 +439,14 @@ end
 #### Migration
 
 Defines the order in which the indexes are created and the corresponding monotonically increasing version numbers.
+Remember: your `EctoFoundationDB.Migrator` module must be included in your application release.
 
 ```elixir
 # lib/example_app/repo.ex
 defmodule ExampleApp.Repo do
   # ...
 
+  use EctoFoundationDB.Migrator
   def migrations() do
     [{0, ExampleApp.Migrations.TemperatureEventIndexes}]
   end

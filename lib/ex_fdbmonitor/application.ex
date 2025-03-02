@@ -12,8 +12,7 @@ defmodule ExFdbmonitor.Application do
     worker =
       if worker?(),
         do: [
-          # Starts a worker by calling: ExFdbmonitor.Worker.start_link(arg)
-          {ExFdbmonitor.Worker, []}
+          ExFdbmonitor.Worker
         ],
         else: []
 
@@ -33,8 +32,8 @@ defmodule ExFdbmonitor.Application do
 
       _ ->
         Logger.warning("""
-        ExFdbmonitor starting without running fdbmonitor. At minimum, you
-        should define `:etc_dir` and `:run_dir`, but you should also consider
+        ExFdbmonitor starting without running fdbmonitor. At minimum, you \
+        should define `:etc_dir` and `:run_dir`, but you should also consider \
         adding a `:bootstrap` config.
         """)
 

@@ -1,4 +1,7 @@
 defmodule ExFdbmonitor.Sandbox.Double do
+  @moduledoc """
+  This module provides functions for managing multi-node FoundationDB sandboxes in double redundancy mode.
+  """
   alias ExFdbmonitor.Sandbox
 
   @default_n 3
