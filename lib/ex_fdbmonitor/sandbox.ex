@@ -90,7 +90,7 @@ defmodule ExFdbmonitor.Sandbox do
                            log_dir: log_dir
                          } ->
         for dir <- [etc_dir, run_dir, data_dir, log_dir] do
-          unless is_nil(dir), do: File.rm_rf!(dir)
+          if !is_nil(dir), do: File.rm_rf!(dir)
         end
       end)
     end
