@@ -21,6 +21,7 @@ defmodule ExFdbmonitor.MixProject do
   def application do
     [
       extra_applications: [:logger, :global_flags],
+      included_applications: [:os_mon],
       mod: {ExFdbmonitor.Application, []}
     ]
   end

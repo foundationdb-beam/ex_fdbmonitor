@@ -20,12 +20,16 @@ public-address = auto:$ID
 listen-address = public
 datadir = <%= @data_dir %>/$ID
 logdir = <%= @log_dir %>
-<%= unless is_nil(@class), do: "class = #{@class}" %>
-<%= unless is_nil(@machine_id), do: "machine-id = #{@machine_id}" %>
-<%= unless is_nil(@machine_id), do: "locality-machineid = #{@machine_id}" %>
-<%= unless is_nil(@data_hall), do: "locality-data-hall = #{@data_hall}" %>
-<%= unless is_nil(@datacenter_id), do: "datacenter-id = #{@datacenter_id}" %>
-<%= unless is_nil(@datacenter_id), do: "locality-dcid = #{@datacenter_id}" %>
+<%= if !is_nil(@class), do: "class = #{@class}" %>
+<%= if !is_nil(@machine_id), do: "machine-id = #{@machine_id}" %>
+<%= if !is_nil(@machine_id), do: "locality-machineid = #{@machine_id}" %>
+<%= if !is_nil(@data_hall), do: "locality-data-hall = #{@data_hall}" %>
+<%= if !is_nil(@datacenter_id), do: "datacenter-id = #{@datacenter_id}" %>
+<%= if !is_nil(@datacenter_id), do: "locality-dcid = #{@datacenter_id}" %>
+<%= if !is_nil(@memory), do: "memory = #{@memory}" %>
+<%= if !is_nil(@memory_vsize), do: "memory-vsize = #{@memory_vsize}" %>
+<%= if !is_nil(@cache_memory), do: "cache-memory = #{@cache_memory}" %>
+<%= if !is_nil(@storage_memory), do: "storage-memory = #{@storage_memory}" %>
 # logsize = 10MiB
 # maxlogssize = 100MiB
 # memory = 8GiB
@@ -38,10 +42,10 @@ logdir = <%= @log_dir %>
 ## Parameters set here override defaults from the [fdbserver] section
 <%= for fdbserver_config <- @fdbservers do %>
 [fdbserver.<%= fdbserver_config[:port] %>]
-<%= unless is_nil(fdbserver_config[:class]), do: "class = #{fdbserver_config[:class]}" %>
+<%= if !is_nil(fdbserver_config[:class]), do: "class = #{fdbserver_config[:class]}" %>
 
 <% end %>
-<%= unless is_nil(@backup) do %>
+<%= if !is_nil(@backup) do %>
 [backup_agent]
 command = <%= @backup_agent %>
 cluster-file = <%= @cluster_file %>
@@ -50,7 +54,7 @@ logdir = <%= @log_dir %>
 [backup_agent.1]
 <% end %>
 
-<%= unless is_nil(@dr) do %>
+<%= if !is_nil(@dr) do %>
 [dr_agent]
 command = <%= @dr_agent %>
 logdir = <%= @log_dir %>
