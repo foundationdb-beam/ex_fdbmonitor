@@ -30,7 +30,6 @@ if config_env() == :prod do
 
     addrs
     |> then(&:proplists.get_value(~c"#{if}", &1))
-    |> IO.inspect()
     |> then(&:proplists.get_all_values(:addr, &1))
     |> Enum.filter(&(tuple_size(&1) == 4))
     |> hd()
