@@ -12,7 +12,7 @@ config :ex_fdbmonitor,
         [port: 5000]
       ]
     ],
-    fdbcli: ~w[configure new single ssd-redwood-1 tenant_mode=required_experimental]
+    fdbcli: ~w[configure new single ssd-redwood-1 tenant_mode=optional_experimental]
   ]
 
 config :ex_fdbmonitor,

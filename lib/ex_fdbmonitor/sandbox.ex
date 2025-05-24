@@ -116,7 +116,7 @@ defmodule ExFdbmonitor.Sandbox do
 
   def build_context(nodes, number, fdbmonitor_config) do
     [Enum.to_list(0..(number - 1)), nodes]
-    |> List.zip()
+    |> Enum.zip()
     |> Enum.map(fn {idx, node} ->
       env = fdbmonitor_config.(idx, node)
       etc_dir = env[:etc_dir]
