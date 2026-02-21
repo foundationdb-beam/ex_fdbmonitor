@@ -16,7 +16,9 @@ defmodule ExFdbmonitor.Application do
         ],
         else: []
 
-    children = worker
+    children =
+      [{DynamicSupervisor, name: ExFdbmonitor.DynamicSupervisor, strategy: :one_for_one}] ++
+        worker
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

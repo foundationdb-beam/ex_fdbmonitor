@@ -44,6 +44,8 @@ defmodule ExFdbmonitor.Worker do
 
       bootstrap!(starter, bootstrap_config, etc_dir: etc_dir, conffile: conffile)
     else
+      cluster_file = ExFdbmonitor.Cluster.file(etc_dir)
+      :ok = ensure_fdbcli_server(cluster_file)
       starter.()
     end
   end
@@ -98,26 +100,49 @@ defmodule ExFdbmonitor.Worker do
     bootstrap_config = Keyword.drop(bootstrap_config, [:cluster, :conf])
 
     res = {:ok, _pid} = starter.()
-    :ok = continue_bootstrap!(bootstrap_config)
+    :ok = continue_bootstrap!(bootstrap_config, cluster_file)
     res
   end
 
-  def continue_bootstrap!([]) do
+  defp continue_bootstrap!([], _cluster_file) do
     :ok
   end
 
-  def continue_bootstrap!([{:fdbcli, nil} | rest]) do
-    continue_bootstrap!(rest)
+  defp continue_bootstrap!([{:fdbcli, nil} | rest], cluster_file) do
+    continue_bootstrap!(rest, cluster_file)
   end
 
-  def continue_bootstrap!([{:fdbcli, exec} | rest]) do
-    # Absence of stderr implies success
-    Logger.notice("#{node()} fdbcli exec #{inspect(exec)}")
+  defp continue_bootstrap!([{:fdbcli, ["configure", "new" | _] = exec} | rest], cluster_file) do
+    Logger.notice("#{node()} fdbcli local exec #{inspect(exec)}")
+    {:ok, [stdout: _]} = ExFdbmonitor.Fdbcli.exec(exec)
+    continue_bootstrap!(rest, cluster_file)
+  end
 
-    {:ok, [stdout: _]} =
-      ExFdbmonitor.Fdbcli.exec(exec)
+  defp continue_bootstrap!([{:fdbcli, exec} | rest], cluster_file) do
+    :ok = ensure_fdbcli_server(cluster_file)
+    :ok = ExFdbmonitor.FdbCli.Server.exec(exec)
+    continue_bootstrap!(rest, cluster_file)
+  end
 
-    continue_bootstrap!(rest)
+  defp ensure_fdbcli_server(cluster_file) do
+    case GenServer.whereis(ExFdbmonitor.FdbCli.Server) do
+      pid when is_pid(pid) ->
+        :ok
+
+      nil ->
+        db = :erlfdb.open(cluster_file)
+        root = :erlfdb_directory.root()
+        dir_name = Application.get_env(:ex_fdbmonitor, :dir, "ex_fdbmonitor")
+        dir = :erlfdb_directory.create_or_open(db, root, dir_name)
+
+        {:ok, _} =
+          DynamicSupervisor.start_child(
+            ExFdbmonitor.DynamicSupervisor,
+            {ExFdbmonitor.FdbCli.Server, {db, dir}}
+          )
+
+        :ok
+    end
   end
 
   defp check_config(_conf_assigns) do

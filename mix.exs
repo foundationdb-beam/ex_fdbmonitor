@@ -32,9 +32,9 @@ defmodule ExFdbmonitor.MixProject do
       {:global_flags, "~> 1.0"},
       {:erlexec, "~> 2.0"},
       {:local_cluster, "~> 2.0"},
-      {:erlfdb, "~> 0.2"},
-      {:ex_doc, "~> 0.16", only: :dev, runtime: false}
-
+      {:ex_doc, "~> 0.16", only: :dev, runtime: false},
+      {:erlfdb, "~> 0.3"},
+      {:dgen, path: "../dgen"}
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]
