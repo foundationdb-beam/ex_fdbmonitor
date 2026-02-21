@@ -1,5 +1,3 @@
-require Logger
-
 defmodule ExFdbmonitor.Worker do
   @moduledoc false
   defp fdbmonitor(),
@@ -14,14 +12,6 @@ defmodule ExFdbmonitor.Worker do
     Supervisor.child_spec(default, [])
   end
 
-  # https://github.com/apple/foundationdb/blob/main/packaging/osx/com.foundationdb.fdbmonitor.plist
-  # <array>
-  #   <string>/usr/local/libexec/fdbmonitor</string>
-  #   <string>--conffile</string>
-  #   <string>/usr/local/etc/foundationdb/foundationdb.conf</string>
-  #   <string>--lockfile</string>
-  #   <string>/var/run/FoundationDB.pid</string>
-  # </array>
   def start_link(_arg) do
     etc_dir = Application.fetch_env!(:ex_fdbmonitor, :etc_dir)
     run_dir = Application.fetch_env!(:ex_fdbmonitor, :run_dir)

@@ -70,7 +70,7 @@ defmodule ExFdbmonitor do
     case ExFdbmonitor.MgmtServer.exclude(node_name) do
       {:ok, _} ->
         Logger.notice("#{node_name} excluded, stopping worker")
-        Supervisor.terminate_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.Worker)
+        Supervisor.terminate_child(ExFdbmonitor.Supervisor, ExFdbmonitor.Worker)
 
       {:error, _reason} = error ->
         error
@@ -81,7 +81,7 @@ defmodule ExFdbmonitor do
     node_name = node()
     Logger.notice("#{node_name} rejoining")
 
-    {:ok, _} = Supervisor.restart_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.Worker)
+    {:ok, _} = Supervisor.restart_child(ExFdbmonitor.Supervisor, ExFdbmonitor.Worker)
     Logger.notice("#{node_name} worker restarted")
 
     case ExFdbmonitor.MgmtServer.include(node_name) do
@@ -96,10 +96,6 @@ defmodule ExFdbmonitor do
 
   def join_cluster!(base_node) do
     :ok = ExFdbmonitor.Cluster.copy_from!(base_node)
-
-    :ok = Supervisor.terminate_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.MgmtServer)
-    {:ok, _} = Supervisor.restart_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.MgmtServer)
-
     :ok
   end
 end
