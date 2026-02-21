@@ -9,19 +9,11 @@ defmodule ExFdbmonitor.Application do
 
   @impl true
   def start(_type, _args) do
-    worker =
+    children =
       if worker?(),
-        do: [
-          ExFdbmonitor.Worker
-        ],
+        do: [{ExFdbmonitor.NodeSupervisor, []}],
         else: []
 
-    children =
-      [{DynamicSupervisor, name: ExFdbmonitor.DynamicSupervisor, strategy: :one_for_one}] ++
-        worker
-
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: ExFdbmonitor.Supervisor]
     Supervisor.start_link(children, opts)
   end

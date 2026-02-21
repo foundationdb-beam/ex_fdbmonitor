@@ -19,9 +19,10 @@ defmodule ExFdbmonitor.Conf do
   end
 
   def write!(conffile, assigns) do
-    File.write!(conffile, ExFdbmonitor.Conf.render(assigns))
+    {content, resolved} = render(assigns)
+    File.write!(conffile, content)
 
-    conffile
+    {conffile, resolved}
   end
 
   def render(assigns) do

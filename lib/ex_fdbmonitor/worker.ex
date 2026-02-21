@@ -45,7 +45,7 @@ defmodule ExFdbmonitor.Worker do
       bootstrap!(starter, bootstrap_config, etc_dir: etc_dir, conffile: conffile)
     else
       cluster_file = ExFdbmonitor.Cluster.file(etc_dir)
-      :ok = ensure_fdbcli_server(cluster_file)
+      :ok = ensure_mgmt_server(cluster_file)
       starter.()
     end
   end
@@ -101,6 +101,7 @@ defmodule ExFdbmonitor.Worker do
 
     res = {:ok, _pid} = starter.()
     :ok = continue_bootstrap!(bootstrap_config, cluster_file)
+    :ok = register_node(cluster_file, resolved[:machine_id])
     res
   end
 
@@ -119,13 +120,18 @@ defmodule ExFdbmonitor.Worker do
   end
 
   defp continue_bootstrap!([{:fdbcli, exec} | rest], cluster_file) do
-    :ok = ensure_fdbcli_server(cluster_file)
-    :ok = ExFdbmonitor.FdbCli.Server.exec(exec)
+    :ok = ensure_mgmt_server(cluster_file)
+    {:ok, [stdout: _]} = ExFdbmonitor.MgmtServer.exec(exec)
     continue_bootstrap!(rest, cluster_file)
   end
 
-  defp ensure_fdbcli_server(cluster_file) do
-    case GenServer.whereis(ExFdbmonitor.FdbCli.Server) do
+  defp register_node(cluster_file, machine_id) do
+    :ok = ensure_mgmt_server(cluster_file)
+    :ok = ExFdbmonitor.MgmtServer.register_node(machine_id, node())
+  end
+
+  defp ensure_mgmt_server(cluster_file) do
+    case GenServer.whereis(ExFdbmonitor.MgmtServer) do
       pid when is_pid(pid) ->
         :ok
 
@@ -138,7 +144,7 @@ defmodule ExFdbmonitor.Worker do
         {:ok, _} =
           DynamicSupervisor.start_child(
             ExFdbmonitor.DynamicSupervisor,
-            {ExFdbmonitor.FdbCli.Server, {db, dir}}
+            {ExFdbmonitor.MgmtServer, {db, dir}}
           )
 
         :ok

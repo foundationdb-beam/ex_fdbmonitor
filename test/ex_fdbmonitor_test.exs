@@ -47,5 +47,21 @@ defmodule ExFdbmonitorTest do
         "world" = :erlfdb.wait(:erlfdb.get(tx, "hello"))
       end)
     end
+
+    # Verify machine_id → node mapping was registered for each node
+    for node <- [node1, node2, node3] do
+      {:ok, machine_id} = :rpc.call(node, ExFdbmonitor.MgmtServer, :get_machine_id, [node])
+      assert is_binary(machine_id)
+    end
+
+    # Leave: exclude node3 and stop its worker
+    :ok = :rpc.call(node3, ExFdbmonitor, :leave, [])
+
+    # Rejoin: restart worker and include node3
+    :ok = :rpc.call(node3, ExFdbmonitor, :rejoin, [])
+
+    # Unknown node returns error
+    {:error, {:unknown_node, :bogus}} =
+      :rpc.call(node1, ExFdbmonitor.MgmtServer, :exclude, [:bogus])
   end
 end

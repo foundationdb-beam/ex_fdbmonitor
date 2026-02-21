@@ -42,13 +42,16 @@ defmodule ExFdbmonitor do
     grouped_cluster_file_contents =
       nodes
       |> Enum.filter(fn node ->
-        applications =
-          :rpc.call(node, Application, :started_applications, [])
-
-        not is_nil(List.keyfind(applications, :ex_fdbmonitor, 0))
+        case :rpc.call(node, Application, :started_applications, []) do
+          {:badrpc, _} -> false
+          applications -> not is_nil(List.keyfind(applications, :ex_fdbmonitor, 0))
+        end
       end)
-      |> Enum.map(fn node ->
-        {node, :rpc.call(node, ExFdbmonitor.Cluster, :read!, [])}
+      |> Enum.flat_map(fn node ->
+        case :rpc.call(node, ExFdbmonitor.Cluster, :read!, []) do
+          {:badrpc, _} -> []
+          content -> [{node, content}]
+        end
       end)
       |> Enum.group_by(fn {_, y} -> y end, fn {x, _} -> x end)
       |> Enum.to_list()
@@ -60,16 +63,42 @@ defmodule ExFdbmonitor do
     join_cluster!(base_node)
   end
 
-  @doc false
+  def leave() do
+    node_name = node()
+    Logger.notice("#{node_name} leaving")
+
+    case ExFdbmonitor.MgmtServer.exclude(node_name) do
+      {:ok, _} ->
+        Logger.notice("#{node_name} excluded, stopping worker")
+        Supervisor.terminate_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.Worker)
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  def rejoin() do
+    node_name = node()
+    Logger.notice("#{node_name} rejoining")
+
+    {:ok, _} = Supervisor.restart_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.Worker)
+    Logger.notice("#{node_name} worker restarted")
+
+    case ExFdbmonitor.MgmtServer.include(node_name) do
+      {:ok, _} ->
+        Logger.notice("#{node_name} included")
+        :ok
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
   def join_cluster!(base_node) do
     :ok = ExFdbmonitor.Cluster.copy_from!(base_node)
 
-    applications = Application.started_applications()
-
-    if not is_nil(List.keyfind(applications, :ex_fdbmonitor, 0)) do
-      :ok = Application.stop(:ex_fdbmonitor)
-      :ok = Application.start(:ex_fdbmonitor)
-    end
+    :ok = Supervisor.terminate_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.MgmtServer)
+    {:ok, _} = Supervisor.restart_child(ExFdbmonitor.NodeSupervisor, ExFdbmonitor.MgmtServer)
 
     :ok
   end
