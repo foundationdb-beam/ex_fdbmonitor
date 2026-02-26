@@ -48,37 +48,32 @@ defmodule ExFdbmonitor.Integration.DoubleTest do
         :erlfdb.open(Sandbox.cluster_file(node))
       end
 
-    # Tenant created on node1 accessible from all
-    tenant_name = "double-replication-test"
-    :ok = :erlfdb_tenant_management.create_tenant(db1, tenant_name)
-    [t1, t2, t3] = for db <- [db1, db2, db3], do: :erlfdb.open_tenant(db, tenant_name)
-
     # Write on node1, read from all 3
-    :erlfdb.transactional(t1, fn tx ->
+    :erlfdb.transactional(db1, fn tx ->
       :ok = :erlfdb.set(tx, "alpha", "one")
     end)
 
-    for tenant <- [t1, t2, t3] do
-      :erlfdb.transactional(tenant, fn tx ->
+    for db <- [db1, db2, db3] do
+      :erlfdb.transactional(db, fn tx ->
         assert "one" == :erlfdb.wait(:erlfdb.get(tx, "alpha"))
       end)
     end
 
     # Write on node2, read from node3
-    :erlfdb.transactional(t2, fn tx ->
+    :erlfdb.transactional(db2, fn tx ->
       :ok = :erlfdb.set(tx, "beta", "two")
     end)
 
-    :erlfdb.transactional(t3, fn tx ->
+    :erlfdb.transactional(db3, fn tx ->
       assert "two" == :erlfdb.wait(:erlfdb.get(tx, "beta"))
     end)
 
     # Write on node3, read from node1
-    :erlfdb.transactional(t3, fn tx ->
+    :erlfdb.transactional(db3, fn tx ->
       :ok = :erlfdb.set(tx, "gamma", "three")
     end)
 
-    :erlfdb.transactional(t1, fn tx ->
+    :erlfdb.transactional(db1, fn tx ->
       assert "three" == :erlfdb.wait(:erlfdb.get(tx, "gamma"))
     end)
   end

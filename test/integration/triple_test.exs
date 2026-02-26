@@ -46,28 +46,23 @@ defmodule ExFdbmonitor.Integration.TripleTest do
     # Open all databases
     dbs = for node <- nodes, do: :erlfdb.open(Sandbox.cluster_file(node))
 
-    # Create tenant from first node
-    tenant_name = "triple-test"
-    :ok = :erlfdb_tenant_management.create_tenant(hd(dbs), tenant_name)
-    tenants = for db <- dbs, do: :erlfdb.open_tenant(db, tenant_name)
-
     # Write on first node, read from all 6
-    :erlfdb.transactional(hd(tenants), fn tx ->
+    :erlfdb.transactional(hd(dbs), fn tx ->
       :ok = :erlfdb.set(tx, "triple_key", "triple_value")
     end)
 
-    for tenant <- tenants do
-      :erlfdb.transactional(tenant, fn tx ->
+    for db <- dbs do
+      :erlfdb.transactional(db, fn tx ->
         assert "triple_value" == :erlfdb.wait(:erlfdb.get(tx, "triple_key"))
       end)
     end
 
     # Write from last node, read from first
-    :erlfdb.transactional(List.last(tenants), fn tx ->
+    :erlfdb.transactional(List.last(dbs), fn tx ->
       :ok = :erlfdb.set(tx, "reverse_key", "reverse_value")
     end)
 
-    :erlfdb.transactional(hd(tenants), fn tx ->
+    :erlfdb.transactional(hd(dbs), fn tx ->
       assert "reverse_value" == :erlfdb.wait(:erlfdb.get(tx, "reverse_key"))
     end)
   end

@@ -25,23 +25,19 @@ defmodule ExFdbmonitor.Integration.DoubleExcludeTest do
   test "scale down double to single, then scale back up", context do
     [node1, node2, node3] = context[:nodes]
 
-    # Open databases and create tenant
+    # Open databases
     dbs = for node <- [node1, node2, node3], do: :erlfdb.open(Sandbox.cluster_file(node))
     [db1, _db2, _db3] = dbs
-    tenant_name = "dex-test"
-    :ok = :erlfdb_tenant_management.create_tenant(db1, tenant_name)
-    tenants = for db <- dbs, do: :erlfdb.open_tenant(db, tenant_name)
-    [t1, t2, t3] = tenants
 
     # ── Phase 1: Baseline (3 nodes, double redundancy) ──
     Logger.notice("Phase 1: writing baseline data")
 
-    :erlfdb.transactional(t1, fn tx ->
+    :erlfdb.transactional(db1, fn tx ->
       :ok = :erlfdb.set(tx, "baseline", "data")
     end)
 
-    for {tenant, node} <- Enum.zip(tenants, [node1, node2, node3]) do
-      :erlfdb.transactional(tenant, fn tx ->
+    for {db, node} <- Enum.zip(dbs, [node1, node2, node3]) do
+      :erlfdb.transactional(db, fn tx ->
         val = :erlfdb.wait(:erlfdb.get(tx, "baseline"))
         Logger.notice("Phase 1: read from #{node} = #{inspect(val)}")
         assert val == "data"
@@ -61,17 +57,17 @@ defmodule ExFdbmonitor.Integration.DoubleExcludeTest do
     Logger.notice("Phase 2: workers stopped on node2 and node3")
 
     # Verify reads/writes on node1
-    :erlfdb.transactional(t1, fn tx ->
+    :erlfdb.transactional(db1, fn tx ->
       val = :erlfdb.wait(:erlfdb.get(tx, "baseline"))
       Logger.notice("Phase 2: read baseline from node1 = #{inspect(val)}")
       assert val == "data"
     end)
 
-    :erlfdb.transactional(t1, fn tx ->
+    :erlfdb.transactional(db1, fn tx ->
       :ok = :erlfdb.set(tx, "while_single", "node1_only")
     end)
 
-    :erlfdb.transactional(t1, fn tx ->
+    :erlfdb.transactional(db1, fn tx ->
       val = :erlfdb.wait(:erlfdb.get(tx, "while_single"))
       Logger.notice("Phase 2: read while_single from node1 = #{inspect(val)}")
       assert val == "node1_only"
@@ -88,8 +84,8 @@ defmodule ExFdbmonitor.Integration.DoubleExcludeTest do
     Logger.notice("Phase 3: scale_up returned")
 
     # Verify all data accessible from all 3 nodes
-    for {tenant, node} <- Enum.zip(tenants, [node1, node2, node3]) do
-      :erlfdb.transactional(tenant, fn tx ->
+    for {db, node} <- Enum.zip(dbs, [node1, node2, node3]) do
+      :erlfdb.transactional(db, fn tx ->
         val1 = :erlfdb.wait(:erlfdb.get(tx, "baseline"))
         val2 = :erlfdb.wait(:erlfdb.get(tx, "while_single"))
         Logger.notice("Phase 3: #{node} baseline=#{inspect(val1)} while_single=#{inspect(val2)}")
@@ -99,11 +95,13 @@ defmodule ExFdbmonitor.Integration.DoubleExcludeTest do
     end
 
     # Write from node3, read from node1
-    :erlfdb.transactional(t3, fn tx ->
+    [_db1, _db2, db3] = dbs
+
+    :erlfdb.transactional(db3, fn tx ->
       :ok = :erlfdb.set(tx, "after_scale_up", "from_node3")
     end)
 
-    :erlfdb.transactional(t1, fn tx ->
+    :erlfdb.transactional(db1, fn tx ->
       val = :erlfdb.wait(:erlfdb.get(tx, "after_scale_up"))
       Logger.notice("Phase 3: read after_scale_up from node1 = #{inspect(val)}")
       assert val == "from_node3"

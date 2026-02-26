@@ -8,11 +8,11 @@ config :ex_fdbmonitor,
     conf: [
       data_dir: ".ex_fdbmonitor/dev/data",
       log_dir: ".ex_fdbmonitor/dev/log",
+      storage_engine: "ssd-2",
       fdbservers: [
         [port: 5000]
       ]
-    ],
-    fdbcli: ~w[configure new single ssd-redwood-1 tenant_mode=optional_experimental]
+    ]
   ]
 
 config :ex_fdbmonitor,

@@ -42,20 +42,16 @@ defmodule ExFdbmonitor.Integration.SingleTest do
       Enum.find(children, fn {id, _, _, _} -> id == ExFdbmonitor.Worker end)
     assert is_pid(worker_pid)
 
-    # Tenant CRUD
+    # Read/write
     cluster_file = Sandbox.cluster_file(node1)
     db = :erlfdb.open(cluster_file)
 
-    tenant_name = "single-test"
-    :ok = :erlfdb_tenant_management.create_tenant(db, tenant_name)
-    tenant = :erlfdb.open_tenant(db, tenant_name)
-
-    :erlfdb.transactional(tenant, fn tx ->
+    :erlfdb.transactional(db, fn tx ->
       :ok = :erlfdb.set(tx, "key1", "value1")
       :ok = :erlfdb.set(tx, "key2", "value2")
     end)
 
-    :erlfdb.transactional(tenant, fn tx ->
+    :erlfdb.transactional(db, fn tx ->
       assert "value1" == :erlfdb.wait(:erlfdb.get(tx, "key1"))
       assert "value2" == :erlfdb.wait(:erlfdb.get(tx, "key2"))
     end)

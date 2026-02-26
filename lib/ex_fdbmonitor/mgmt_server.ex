@@ -16,6 +16,10 @@ defmodule ExFdbmonitor.MgmtServer do
   # {name, version}
   @tuid {"ExFdbmonitor.MgmtServer", 0}
 
+  @min_nodes %{"single" => 1, "double" => 3, "triple" => 5}
+  @valid_modes Map.keys(@min_nodes)
+  @mode_order %{"single" => 1, "double" => 2, "triple" => 3}
+
   def start_link({db, dir}) do
     DGenServer.start_link(__MODULE__, [], name: __MODULE__, tenant: {db, dir})
   end
@@ -80,11 +84,22 @@ defmodule ExFdbmonitor.MgmtServer do
   The caller must start workers on the new nodes *before* calling this.
   Executes under the DGenServer lock:
   1. `include` each new node
-  2. Set coordinators across all nodes
+  2. `coordinators auto`
   3. `configure <target_mode>`
   """
   def scale_up(target_mode, nodes_to_add) do
     DGenServer.call(__MODULE__, {:scale_up, target_mode, nodes_to_add}, :infinity)
+  end
+
+  @doc """
+  Declare the desired redundancy mode for the cluster.
+
+  Each node calls this during bootstrap. When the number of registered
+  nodes reaches the minimum for `target_mode`, coordinators and redundancy
+  are configured. Calls before the threshold is met are no-ops.
+  """
+  def set_redundancy_mode(target_mode) do
+    DGenServer.call(__MODULE__, {:set_redundancy_mode, target_mode}, :infinity)
   end
 
   # --- DGenServer callbacks ---
@@ -147,6 +162,20 @@ defmodule ExFdbmonitor.MgmtServer do
     end
   end
 
+  def handle_call({:set_redundancy_mode, target_mode}, _from, state) do
+    with :ok <- validate_mode(target_mode) do
+      all_nodes = Map.keys(state.nodes)
+
+      if length(all_nodes) >= @min_nodes[target_mode] do
+        {:lock, state}
+      else
+        {:reply, :ok, state}
+      end
+    else
+      {:error, _} = error -> {:reply, error, state}
+    end
+  end
+
   @impl true
   def handle_locked({:call, _from}, {:exec, fdbcli_args}, state) do
     Logger.notice("#{node()} fdbcli server exec #{inspect(fdbcli_args)}")
@@ -174,7 +203,7 @@ defmodule ExFdbmonitor.MgmtServer do
     surviving = Map.keys(state.nodes) -- nodes_to_remove
 
     with {:ok, _} <- fdbcli_exec(["configure", target_mode]),
-         {:ok, _} <- set_coordinators(surviving),
+         {:ok, _} <- set_coordinators(target_mode, surviving),
          :ok <- exclude_nodes(nodes_to_remove, state) do
       {:reply, {:ok, nodes_to_remove}, state}
     else
@@ -183,10 +212,8 @@ defmodule ExFdbmonitor.MgmtServer do
   end
 
   def handle_locked({:call, _from}, {:scale_up, target_mode, nodes_to_add}, state) do
-    all_nodes = Map.keys(state.nodes)
-
     with :ok <- include_nodes(nodes_to_add, state),
-         {:ok, _} <- set_coordinators(all_nodes),
+         {:ok, _} <- fdbcli_exec(["coordinators", "auto"]),
          {:ok, _} <- fdbcli_configure_with_retry(target_mode) do
       {:reply, :ok, state}
     else
@@ -194,10 +221,23 @@ defmodule ExFdbmonitor.MgmtServer do
     end
   end
 
-  # --- Private helpers ---
+  def handle_locked({:call, _from}, {:set_redundancy_mode, target_mode}, state) do
+    current = current_redundancy_mode()
 
-  @min_nodes %{"single" => 1, "double" => 3, "triple" => 5}
-  @valid_modes Map.keys(@min_nodes)
+    if @mode_order[current] >= @mode_order[target_mode] do
+      Logger.notice("#{node()} redundancy already #{current}, skipping #{target_mode}")
+      {:reply, :ok, state}
+    else
+      with {:ok, _} <- fdbcli_exec(["coordinators", "auto"]),
+           {:ok, _} <- fdbcli_configure_with_retry(target_mode) do
+        {:reply, :ok, state}
+      else
+        {:error, _} = error -> {:reply, error, state}
+      end
+    end
+  end
+
+  # --- Private helpers ---
 
   defp validate_mode(mode) when mode in @valid_modes, do: :ok
   defp validate_mode(mode), do: {:error, {:invalid_mode, mode}}
@@ -218,6 +258,18 @@ defmodule ExFdbmonitor.MgmtServer do
       :ok
     else
       {:error, {:insufficient_nodes, mode, length(nodes), min}}
+    end
+  end
+
+  defp current_redundancy_mode do
+    case ExFdbmonitor.Fdbcli.exec(["status", "json"]) do
+      {:ok, [stdout: stdout]} ->
+        output = IO.iodata_to_binary(stdout)
+        status = JSON.decode!(output)
+        get_in(status, ["cluster", "configuration", "redundancy_mode"])
+
+      _ ->
+        nil
     end
   end
 
@@ -246,41 +298,36 @@ defmodule ExFdbmonitor.MgmtServer do
     end
   end
 
-  defp set_coordinators(nodes) do
+  defp set_coordinators(target_mode, nodes) do
     addrs =
       nodes
       |> Enum.flat_map(fn node_name ->
         case :rpc.call(node_name, ExFdbmonitor.Conf, :read_fdbserver_addrs, []) do
           {:badrpc, _} -> []
-          addrs -> Enum.map(addrs, &{node_name, &1})
+          addrs -> addrs
         end
       end)
 
-    selected = select_coordinators(addrs, length(nodes))
+    current = current_coordinators()
+    desired_count = @min_nodes[target_mode]
+    selected = select_coordinators(addrs, current, desired_count)
     coord_arg = Enum.join(selected, ",")
     fdbcli_exec(["coordinators", coord_arg])
   end
 
-  # Select coordinator addresses, spreading across nodes.
-  # addrs is [{node_name, "ip:port"}, ...]
-  defp select_coordinators(addrs, _num_nodes) do
-    # Group by node, take 1 per node first (round-robin), then fill
-    by_node = Enum.group_by(addrs, &elem(&1, 0), &elem(&1, 1))
-    nodes = Map.keys(by_node)
+  defp current_coordinators do
+    cluster_content = String.trim(ExFdbmonitor.Cluster.read!())
+    [_, addr_part] = String.split(cluster_content, "@")
+    String.split(addr_part, ",")
+  end
 
-    # Take first address from each node
-    first_pass = Enum.map(nodes, fn n -> hd(by_node[n]) end)
+  # Prefer existing coordinators that are on surviving nodes, then fill
+  # with new addresses to reach the desired count.
+  defp select_coordinators(surviving_addrs, current_coords, desired_count) do
+    kept = Enum.filter(current_coords, &(&1 in surviving_addrs))
+    new = surviving_addrs -- kept
 
-    # If we need more, take additional addresses from nodes with multiple
-    extras =
-      Enum.flat_map(nodes, fn n ->
-        case by_node[n] do
-          [_ | rest] -> rest
-          _ -> []
-        end
-      end)
-
-    first_pass ++ extras
+    Enum.take(kept ++ new, desired_count)
   end
 
   defp exclude_nodes(nodes, state) do

@@ -15,9 +15,9 @@ config :ex_fdbmonitor,
     conf: [
       data_dir: ".example_app/dev/fdb/data",
       log_dir: ".example_app/dev/fdb/log",
+      storage_engine: "ssd-2",
       fdbservers: [
         [port: 5000]
       ]
-    ],
-    fdbcli: ~w[configure new single ssd-redwood-1]
+    ]
   ]
