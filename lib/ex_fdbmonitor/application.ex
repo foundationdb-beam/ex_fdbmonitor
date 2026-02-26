@@ -12,7 +12,7 @@ defmodule ExFdbmonitor.Application do
         etc_dir = Application.fetch_env!(:ex_fdbmonitor, :etc_dir)
 
         # Phase 1: write config files before any processes start
-        {cluster_file, machine_id, fdbcli_cmds} = prepare_files(etc_dir)
+        {cluster_file, machine_id, fdbcli_cmds, scale_up_mode} = prepare_files(etc_dir)
 
         [
           {DynamicSupervisor, name: ExFdbmonitor.DynamicSupervisor, strategy: :one_for_one},
@@ -20,7 +20,9 @@ defmodule ExFdbmonitor.Application do
           # Phase 2: run fdbcli commands and start MgmtServer (requires Worker running)
           %{
             id: :setup_cluster,
-            start: {__MODULE__, :setup_cluster, [cluster_file, fdbcli_cmds, machine_id]},
+            start:
+              {__MODULE__, :setup_cluster,
+               [cluster_file, fdbcli_cmds, machine_id, scale_up_mode]},
             restart: :temporary
           }
         ]
@@ -50,8 +52,9 @@ defmodule ExFdbmonitor.Application do
   end
 
   # Phase 1: prepare all files on disk (cluster file, conffile, dirs).
-  # Returns {cluster_file, machine_id, fdbcli_cmds} where fdbcli_cmds
-  # are deferred to phase 2 since they require a running fdbserver.
+  # Returns {cluster_file, machine_id, fdbcli_cmds, scale_up_mode} where
+  # fdbcli_cmds and scale_up_mode are deferred to phase 2 since they
+  # require a running fdbserver.
   defp prepare_files(etc_dir) do
     conffile = Path.expand(Path.join([etc_dir, "foundationdb.conf"]))
 
@@ -65,7 +68,7 @@ defmodule ExFdbmonitor.Application do
       write_bootstrap_files(bootstrap_config, etc_dir, conffile)
     else
       cluster_file = ExFdbmonitor.Cluster.file(etc_dir)
-      {cluster_file, nil, []}
+      {cluster_file, nil, [], nil}
     end
   end
 
@@ -117,14 +120,16 @@ defmodule ExFdbmonitor.Application do
       |> Keyword.get_values(:fdbcli)
       |> Enum.reject(&is_nil/1)
 
-    {cluster_file, resolved[:machine_id], fdbcli_cmds}
+    scale_up_mode = bootstrap_config[:scale_up]
+
+    {cluster_file, resolved[:machine_id], fdbcli_cmds, scale_up_mode}
   end
 
-  # Phase 2: run fdbcli commands and start MgmtServer.
+  # Phase 2: run fdbcli commands, register node, and optionally scale up.
   # Called as a child start function after Worker is running.
   # Returns :ignore so the supervisor treats this as a completed one-shot.
   @doc false
-  def setup_cluster(cluster_file, fdbcli_cmds, machine_id) do
+  def setup_cluster(cluster_file, fdbcli_cmds, machine_id, scale_up_mode) do
     for cmd <- fdbcli_cmds do
       case cmd do
         ["configure", "new" | _] ->
@@ -141,6 +146,10 @@ defmodule ExFdbmonitor.Application do
 
     if machine_id do
       :ok = ExFdbmonitor.MgmtServer.register_node(machine_id, node())
+    end
+
+    if scale_up_mode do
+      :ok = ExFdbmonitor.MgmtServer.scale_up(scale_up_mode, [])
     end
 
     :ignore

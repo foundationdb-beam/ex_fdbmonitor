@@ -17,6 +17,7 @@ defmodule ExFdbmonitor.Sandbox.Double do
   end
 
   defp config(x, _node, name, options) do
+    n = Keyword.get(options, :nodes, @default_n)
     m = Keyword.get(options, :processes, 1)
     starting_port = Keyword.get(options, :starting_port, 5000)
     conf_assigns = Keyword.get(options, :conf_assigns, [])
@@ -41,8 +42,7 @@ defmodule ExFdbmonitor.Sandbox.Double do
           ),
         fdbcli:
           if(x == 0, do: ~w[configure new single ssd-redwood-1 tenant_mode=optional_experimental]),
-        fdbcli: if(x == 2, do: ~w[configure double]),
-        fdbcli: if(x == 2, do: ~w[coordinators auto])
+        scale_up: if(x == n - 1, do: "double")
       ],
       etc_dir: Sandbox.etc_dir(name, x),
       run_dir: Sandbox.run_dir(name, x)

@@ -48,4 +48,26 @@ defmodule ExFdbmonitor.Conf do
       dr: nil
     ]
   end
+
+  @doc """
+  Read the fdbserver addresses from this node's foundationdb.conf and cluster file.
+
+  Parses `[fdbserver.PORT]` sections from the conf file and extracts the IP
+  from the cluster file. Returns a list of `"ip:port"` strings.
+  """
+  def read_fdbserver_addrs do
+    etc_dir = Application.fetch_env!(:ex_fdbmonitor, :etc_dir)
+    conffile = Path.expand(Path.join([etc_dir, "foundationdb.conf"]))
+    content = File.read!(conffile)
+
+    ports =
+      Regex.scan(~r/\[fdbserver\.(\d+)\]/, content)
+      |> Enum.map(fn [_, port] -> port end)
+
+    cluster_content = String.trim(ExFdbmonitor.Cluster.read!())
+    [_, addr_part] = String.split(cluster_content, "@")
+    [ip, _port] = String.split(hd(String.split(addr_part, ",")), ":")
+
+    Enum.map(ports, fn port -> "#{ip}:#{port}" end)
+  end
 end
