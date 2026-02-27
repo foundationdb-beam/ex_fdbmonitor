@@ -60,14 +60,15 @@ defmodule ExFdbmonitor do
     [{_content, [base_node | _]}] = grouped_cluster_file_contents
 
     Logger.notice("#{node()} joining via #{base_node}")
-    join_cluster!(base_node)
+    :ok = ExFdbmonitor.Cluster.copy_from!(base_node)
+    :ok
   end
 
   def leave() do
     node_name = node()
     Logger.notice("#{node_name} leaving")
 
-    case ExFdbmonitor.MgmtServer.exclude(node_name) do
+    case ExFdbmonitor.MgmtServer.scale_down([node_name]) do
       {:ok, _} ->
         Logger.notice("#{node_name} excluded, stopping worker")
         Supervisor.terminate_child(ExFdbmonitor.Supervisor, ExFdbmonitor.Worker)
@@ -75,27 +76,5 @@ defmodule ExFdbmonitor do
       {:error, _reason} = error ->
         error
     end
-  end
-
-  def rejoin() do
-    node_name = node()
-    Logger.notice("#{node_name} rejoining")
-
-    {:ok, _} = Supervisor.restart_child(ExFdbmonitor.Supervisor, ExFdbmonitor.Worker)
-    Logger.notice("#{node_name} worker restarted")
-
-    case ExFdbmonitor.MgmtServer.include(node_name) do
-      {:ok, _} ->
-        Logger.notice("#{node_name} included")
-        :ok
-
-      {:error, _reason} = error ->
-        error
-    end
-  end
-
-  def join_cluster!(base_node) do
-    :ok = ExFdbmonitor.Cluster.copy_from!(base_node)
-    :ok
   end
 end

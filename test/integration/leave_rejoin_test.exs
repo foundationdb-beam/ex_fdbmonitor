@@ -71,8 +71,9 @@ defmodule ExFdbmonitor.Integration.LeaveRejoinTest do
       assert "written" == :erlfdb.wait(:erlfdb.get(tx, "during_leave"))
     end)
 
-    # ── Phase 3: After rejoin() on node3 ──
-    :ok = :rpc.call(node3, ExFdbmonitor, :rejoin, [])
+    # ── Phase 3: Rejoin node3 via restart_child + scale_up ──
+    {:ok, _} = :rpc.call(node3, Supervisor, :restart_child, [ExFdbmonitor.Supervisor, ExFdbmonitor.Worker])
+    :ok = :rpc.call(node3, ExFdbmonitor.MgmtServer, :scale_up, [nil, [node3]])
 
     # Worker is running again (new pid)
     children_after_rejoin = :rpc.call(node3, Supervisor, :which_children, [ExFdbmonitor.Supervisor])
@@ -108,7 +109,8 @@ defmodule ExFdbmonitor.Integration.LeaveRejoinTest do
       Enum.find(children_second_leave, fn {id, _, _, _} -> id == ExFdbmonitor.Worker end)
     assert second_leave_state == :undefined
 
-    :ok = :rpc.call(node3, ExFdbmonitor, :rejoin, [])
+    {:ok, _} = :rpc.call(node3, Supervisor, :restart_child, [ExFdbmonitor.Supervisor, ExFdbmonitor.Worker])
+    :ok = :rpc.call(node3, ExFdbmonitor.MgmtServer, :scale_up, [nil, [node3]])
 
     children_second_rejoin = :rpc.call(node3, Supervisor, :which_children, [ExFdbmonitor.Supervisor])
     {ExFdbmonitor.Worker, second_rejoin_pid, :worker, _} =

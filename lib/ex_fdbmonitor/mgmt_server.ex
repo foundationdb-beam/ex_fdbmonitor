@@ -11,7 +11,7 @@ defmodule ExFdbmonitor.MgmtServer do
 
   use DGenServer
 
-  defstruct nodes: %{}
+  defstruct nodes: %{}, redundancy_mode: nil
 
   # {name, version}
   @tuid {"ExFdbmonitor.MgmtServer", 0}
@@ -64,42 +64,38 @@ defmodule ExFdbmonitor.MgmtServer do
   end
 
   @doc """
-  Scale the cluster down to `target_mode` by removing `nodes_to_remove`.
+  Gracefully remove `nodes_to_exclude` from the cluster.
 
-  Executes under the DGenServer lock:
-  1. `configure <target_mode>`
+  Automatically determines the appropriate redundancy mode for the
+  surviving nodes and downgrades if necessary. Executes under the
+  DGenServer lock:
+  1. `configure <mode>` (only if downgrade needed)
   2. Set coordinators to surviving nodes
   3. `exclude` each departing node (blocks until data moved)
 
-  The caller is responsible for stopping workers on the removed nodes after
-  this call returns.
+  The caller is responsible for stopping workers on the removed nodes
+  after this call returns.
   """
-  def scale_down(target_mode, nodes_to_remove) do
-    DGenServer.call(__MODULE__, {:scale_down, target_mode, nodes_to_remove}, :infinity)
+  def scale_down(nodes_to_exclude) do
+    DGenServer.call(__MODULE__, {:scale_down, nodes_to_exclude}, :infinity)
   end
 
   @doc """
-  Scale the cluster up to `target_mode` by adding `nodes_to_add`.
+  Declare the desired redundancy mode and configure when ready.
 
-  The caller must start workers on the new nodes *before* calling this.
-  Executes under the DGenServer lock:
-  1. `include` each new node
-  2. `coordinators auto`
-  3. `configure <target_mode>`
+  When `target_mode` is non-nil it is stored as the redundancy ceiling.
+  When `target_mode` is nil the previously stored mode is used (also
+  nil is fine — the call becomes a no-op).
+
+  `nodes_to_include` is a list of node names to `include` back into FDB
+  before configuring (e.g. after a previous `exclude`).
+
+  If enough nodes are registered (`@min_nodes`), acquires the lock and
+  runs `include` → `coordinators auto` → `configure <mode>`.  Calls
+  before the threshold is met are no-ops.
   """
-  def scale_up(target_mode, nodes_to_add) do
-    DGenServer.call(__MODULE__, {:scale_up, target_mode, nodes_to_add}, :infinity)
-  end
-
-  @doc """
-  Declare the desired redundancy mode for the cluster.
-
-  Each node calls this during bootstrap. When the number of registered
-  nodes reaches the minimum for `target_mode`, coordinators and redundancy
-  are configured. Calls before the threshold is met are no-ops.
-  """
-  def set_redundancy_mode(target_mode) do
-    DGenServer.call(__MODULE__, {:set_redundancy_mode, target_mode}, :infinity)
+  def scale_up(target_mode, nodes_to_include) do
+    DGenServer.call(__MODULE__, {:scale_up, target_mode, nodes_to_include}, :infinity)
   end
 
   # --- DGenServer callbacks ---
@@ -140,36 +136,41 @@ defmodule ExFdbmonitor.MgmtServer do
     end
   end
 
-  def handle_call({:scale_down, target_mode, nodes_to_remove}, _from, state) do
-    with :ok <- validate_mode(target_mode),
-         :ok <- validate_known_nodes(nodes_to_remove, state),
-         surviving = Map.keys(state.nodes) -- nodes_to_remove,
-         :ok <- validate_min_nodes(target_mode, surviving) do
+  def handle_call({:scale_down, nodes_to_exclude}, _from, state) do
+    with :ok <- validate_known_nodes(nodes_to_exclude, state),
+         surviving = Map.keys(state.nodes) -- nodes_to_exclude,
+         :ok <- validate_has_survivors(surviving) do
       {:lock, state}
     else
       {:error, _} = error -> {:reply, error, state}
     end
   end
 
-  def handle_call({:scale_up, target_mode, nodes_to_add}, _from, state) do
-    with :ok <- validate_mode(target_mode),
-         :ok <- validate_known_nodes(nodes_to_add, state),
-         all_nodes = Map.keys(state.nodes),
-         :ok <- validate_min_nodes(target_mode, all_nodes) do
-      {:lock, state}
-    else
-      {:error, _} = error -> {:reply, error, state}
-    end
-  end
+  def handle_call({:scale_up, target_mode, nodes_to_include}, _from, state) do
+    with :ok <- validate_known_nodes(nodes_to_include, state) do
+      {effective_mode, state} =
+        if target_mode do
+          {target_mode, %{state | redundancy_mode: target_mode}}
+        else
+          {state.redundancy_mode, state}
+        end
 
-  def handle_call({:set_redundancy_mode, target_mode}, _from, state) do
-    with :ok <- validate_mode(target_mode) do
-      all_nodes = Map.keys(state.nodes)
+      case effective_mode do
+        nil ->
+          {:reply, :ok, state}
 
-      if length(all_nodes) >= @min_nodes[target_mode] do
-        {:lock, state}
-      else
-        {:reply, :ok, state}
+        mode ->
+          with :ok <- validate_mode(mode) do
+            all_nodes = Map.keys(state.nodes)
+
+            if length(all_nodes) >= @min_nodes[mode] do
+              {:lock, state}
+            else
+              {:reply, :ok, state}
+            end
+          else
+            {:error, _} = error -> {:reply, error, state}
+          end
       end
     else
       {:error, _} = error -> {:reply, error, state}
@@ -199,41 +200,37 @@ defmodule ExFdbmonitor.MgmtServer do
     {:reply, result, state}
   end
 
-  def handle_locked({:call, _from}, {:scale_down, target_mode, nodes_to_remove}, state) do
-    surviving = Map.keys(state.nodes) -- nodes_to_remove
+  def handle_locked({:call, _from}, {:scale_down, nodes_to_exclude}, state) do
+    surviving = Map.keys(state.nodes) -- nodes_to_exclude
+    current = current_redundancy_mode()
+    target = target_mode(length(surviving), state)
 
-    with {:ok, _} <- fdbcli_exec(["configure", target_mode]),
-         {:ok, _} <- set_coordinators(target_mode, surviving),
-         :ok <- exclude_nodes(nodes_to_remove, state) do
-      {:reply, {:ok, nodes_to_remove}, state}
+    with {:ok, _} <- maybe_configure(current, target),
+         {:ok, _} <- set_coordinators(target, surviving),
+         :ok <- exclude_nodes(nodes_to_exclude, state) do
+      {:reply, {:ok, nodes_to_exclude}, state}
     else
       {:error, _} = error -> {:reply, error, state}
     end
   end
 
-  def handle_locked({:call, _from}, {:scale_up, target_mode, nodes_to_add}, state) do
-    with :ok <- include_nodes(nodes_to_add, state),
-         {:ok, _} <- fdbcli_exec(["coordinators", "auto"]),
-         {:ok, _} <- fdbcli_configure_with_retry(target_mode) do
-      {:reply, :ok, state}
-    else
-      {:error, _} = error -> {:reply, error, state}
-    end
-  end
-
-  def handle_locked({:call, _from}, {:set_redundancy_mode, target_mode}, state) do
+  def handle_locked({:call, _from}, {:scale_up, _target_mode, nodes_to_include}, state) do
+    mode = state.redundancy_mode
     current = current_redundancy_mode()
 
-    if @mode_order[current] >= @mode_order[target_mode] do
-      Logger.notice("#{node()} redundancy already #{current}, skipping #{target_mode}")
-      {:reply, :ok, state}
-    else
-      with {:ok, _} <- fdbcli_exec(["coordinators", "auto"]),
-           {:ok, _} <- fdbcli_configure_with_retry(target_mode) do
+    with :ok <- include_nodes(nodes_to_include, state),
+         {:ok, _} <- fdbcli_exec(["coordinators", "auto"]) do
+      if @mode_order[current] >= @mode_order[mode] do
+        Logger.notice("#{node()} redundancy already #{current}, skipping #{mode}")
         {:reply, :ok, state}
       else
-        {:error, _} = error -> {:reply, error, state}
+        case fdbcli_configure_with_retry(mode) do
+          {:ok, _} -> {:reply, :ok, state}
+          {:error, _} = error -> {:reply, error, state}
+        end
       end
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -251,13 +248,35 @@ defmodule ExFdbmonitor.MgmtServer do
     end
   end
 
-  defp validate_min_nodes(mode, nodes) do
-    min = @min_nodes[mode]
+  defp validate_has_survivors(surviving) do
+    if surviving != [], do: :ok, else: {:error, :cannot_remove_all_nodes}
+  end
 
-    if length(nodes) >= min do
-      :ok
+  # The target mode for a given survivor count, capped at the declared
+  # redundancy_mode ceiling (if set via scale_up).
+  defp target_mode(survivor_count, state) do
+    max_supported = max_mode_for_count(survivor_count)
+
+    case state.redundancy_mode do
+      nil -> max_supported
+      declared -> min_mode(max_supported, declared)
+    end
+  end
+
+  defp max_mode_for_count(n) when n >= 5, do: "triple"
+  defp max_mode_for_count(n) when n >= 3, do: "double"
+  defp max_mode_for_count(_n), do: "single"
+
+  defp min_mode(a, b) do
+    if @mode_order[a] <= @mode_order[b], do: a, else: b
+  end
+
+  # Only reconfigure if the current mode exceeds what survivors can support.
+  defp maybe_configure(current, target) do
+    if @mode_order[current] > @mode_order[target] do
+      fdbcli_exec(["configure", target])
     else
-      {:error, {:insufficient_nodes, mode, length(nodes), min}}
+      {:ok, :unchanged}
     end
   end
 
@@ -330,25 +349,31 @@ defmodule ExFdbmonitor.MgmtServer do
     Enum.take(kept ++ new, desired_count)
   end
 
-  defp exclude_nodes(nodes, state) do
-    Enum.reduce_while(nodes, :ok, fn node_name, :ok ->
-      machine_id = state.nodes[node_name]
+  defp exclude_nodes([], _state), do: :ok
 
-      case fdbcli_exec(["exclude", "locality_machineid:#{machine_id}"]) do
-        {:ok, _} -> {:cont, :ok}
-        {:error, _} = error -> {:halt, error}
-      end
-    end)
+  defp exclude_nodes(nodes, state) do
+    args = ["exclude" | locality_args(nodes, state)]
+
+    case fdbcli_exec(args) do
+      {:ok, _} -> :ok
+      {:error, _} = error -> error
+    end
   end
 
-  defp include_nodes(nodes, state) do
-    Enum.reduce_while(nodes, :ok, fn node_name, :ok ->
-      machine_id = state.nodes[node_name]
+  defp include_nodes([], _state), do: :ok
 
-      case fdbcli_exec(["include", "locality_machineid:#{machine_id}"]) do
-        {:ok, _} -> {:cont, :ok}
-        {:error, _} = error -> {:halt, error}
-      end
+  defp include_nodes(nodes, state) do
+    args = ["include" | locality_args(nodes, state)]
+
+    case fdbcli_exec(args) do
+      {:ok, _} -> :ok
+      {:error, _} = error -> error
+    end
+  end
+
+  defp locality_args(nodes, state) do
+    Enum.map(nodes, fn node_name ->
+      "locality_machineid:#{state.nodes[node_name]}"
     end)
   end
 end

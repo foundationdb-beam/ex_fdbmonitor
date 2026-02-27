@@ -21,7 +21,8 @@ defmodule ExFdbmonitor.Application do
           %{
             id: :setup_cluster,
             start:
-              {__MODULE__, :setup_cluster, [cluster_file, fdbcli_cmds, machine_id, redundancy_mode]},
+              {__MODULE__, :setup_cluster,
+               [cluster_file, fdbcli_cmds, machine_id, redundancy_mode]},
             restart: :temporary
           }
         ]
@@ -160,17 +161,13 @@ defmodule ExFdbmonitor.Application do
       end
     end
 
+    ensure_mgmt_server(cluster_file)
+
     if machine_id do
-      ensure_mgmt_server(cluster_file)
       :ok = ExFdbmonitor.MgmtServer.register_node(machine_id, node())
     end
 
-    if redundancy_mode do
-      ensure_mgmt_server(cluster_file)
-      :ok = ExFdbmonitor.MgmtServer.set_redundancy_mode(redundancy_mode)
-    end
-
-    ensure_mgmt_server(cluster_file)
+    :ok = ExFdbmonitor.MgmtServer.scale_up(redundancy_mode, [node()])
 
     :ignore
   end
