@@ -18,8 +18,8 @@ coordinated across nodes via Erlang distribution.
 3. **Redundancy** — once enough nodes are registered, `scale_up` configures
    coordinators and the declared redundancy mode (`"double"`, `"triple"`).
 4. **Restarts** — on restart the bootstrap config is ignored (data files
-   already exist). The node re-includes itself and re-evaluates redundancy
-   automatically.
+   already exist). The node re-includes itself if necessary and re-evaluates
+   redundancy automatically.
 
 All mutating FDB operations are serialized through `ExFdbmonitor.MgmtServer`, a
 [DGenServer](https://github.com/foundationdb-beam/dgen) backed by FDB itself.
@@ -65,11 +65,9 @@ config :ex_fdbmonitor,
 
 config :ex_fdbmonitor,
   bootstrap: [
-    cluster: [coordinator_addr: "127.0.0.1"],
     conf: [
       data_dir: ".my_app/dev/fdb/data",
       log_dir: ".my_app/dev/fdb/log",
-      storage_engine: "ssd-2",
       fdbservers: [[port: 5000]]
     ]
   ]
@@ -94,12 +92,21 @@ config :ex_fdbmonitor,
 
 config :ex_fdbmonitor,
   bootstrap: [
+  
+    # nodes must communicate with coordinators over the
+    # network interface
     cluster: [coordinator_addr: addr.("eth0")],
+    
     conf: [
       data_dir: "/var/lib/my_app/fdb/data",
       log_dir: "/var/lib/my_app/fdb/log",
       storage_engine: "ssd-2",
+      
+      # We're defining 2 fdbservers per node
       fdbservers: [[port: 4500], [port: 4501]],
+      
+      # When safe to do so, ex_fdbmonitor will upgrade
+      # to 'double' redunancy automatically
       redundancy_mode: "double"
     ]
   ]
@@ -117,7 +124,7 @@ config :ex_fdbmonitor,
 
 | Key | Description |
 |-----|-------------|
-| `cluster: [coordinator_addr:]` | IP address for the initial coordinator |
+| `cluster: [coordinator_addr:]` | IP address for the initial coordinator (default `"127.0.0.1"`) |
 | `conf: [data_dir:]` | FDB data directory |
 | `conf: [log_dir:]` | FDB log directory |
 | `conf: [storage_engine:]` | Storage engine (default `"ssd-2"`) |

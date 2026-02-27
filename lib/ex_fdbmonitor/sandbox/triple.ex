@@ -23,7 +23,7 @@ defmodule ExFdbmonitor.Sandbox.Triple do
 
     [
       bootstrap: [
-        cluster: [coordinator_addr: "127.0.0.1"],
+        cluster: [],
         conf:
           Keyword.merge(
             [

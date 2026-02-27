@@ -71,12 +71,12 @@ defmodule ExFdbmonitor.Cluster do
   def render(assigns) do
     eex_file = Path.join([:code.priv_dir(:ex_fdbmonitor), @fdb_cluster_eex])
 
-    EEx.eval_file(eex_file,
-      assigns:
-        [
-          cluster_name: Base.encode16(:crypto.strong_rand_bytes(4)),
-          cluster_id: Base.encode16(:crypto.strong_rand_bytes(4))
-        ] ++ assigns
-    )
+    defaults = [
+      cluster_name: Base.encode16(:crypto.strong_rand_bytes(4)),
+      cluster_id: Base.encode16(:crypto.strong_rand_bytes(4)),
+      coordinator_addr: "127.0.0.1"
+    ]
+
+    EEx.eval_file(eex_file, assigns: Keyword.merge(defaults, assigns))
   end
 end

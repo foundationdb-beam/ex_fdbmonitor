@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 (2026-02-27)
 
 ### Breaking Changes
 
@@ -46,13 +46,3 @@ bootstrap: [
   ]
 ]
 ```
-
-### Added
-
-- `MgmtServer.set_redundancy_mode/1` — declarative redundancy configuration
-  that triggers when enough nodes are registered.
-- `MgmtServer` skips redundancy changes when current mode >= target.
-- `MgmtServer.scale_up/2` now uses `coordinators auto` instead of manual
-  coordinator selection.
-- `MgmtServer.scale_down/2` prefers keeping existing coordinators on surviving
-  nodes.

@@ -89,7 +89,7 @@ defmodule ExFdbmonitor.Application do
 
   defp write_bootstrap_files(bootstrap_config, etc_dir, conffile) do
     fdbservers = bootstrap_config[:conf][:fdbservers]
-    cluster_assigns = bootstrap_config[:cluster]
+    cluster_assigns = bootstrap_config[:cluster] || []
 
     nodes = Application.get_env(:ex_fdbmonitor, :nodes, :erlang.nodes())
     fdb_peers = Enum.filter(nodes, &fdb_node?/1)
