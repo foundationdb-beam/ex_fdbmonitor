@@ -4,6 +4,7 @@ defmodule ExFdbmonitor.MixProject do
   def project do
     [
       app: :ex_fdbmonitor,
+      description: "A tool for creating FoundationDB clusters",
       version: "0.2.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
