@@ -1,3 +1,5 @@
+require Logger
+
 defmodule ExFdbmonitor.Cluster do
   @moduledoc false
 
@@ -19,6 +21,39 @@ defmodule ExFdbmonitor.Cluster do
   def copy_from!(node) do
     content = :rpc.call(node, __MODULE__, :read!, [])
     File.write!(file(), content)
+  end
+
+  @doc """
+  Join an existing cluster by copying the cluster file from a peer.
+
+  Reads the cluster file from each node in `nodes` that is running
+  `:ex_fdbmonitor`, groups them by content, and crashes if more than
+  one distinct cluster file is found.  Copies the file from the first
+  reachable peer.
+  """
+  def join!(nodes) do
+    grouped =
+      nodes
+      |> Enum.filter(fn node ->
+        case :rpc.call(node, Application, :started_applications, []) do
+          {:badrpc, _} -> false
+          apps -> not is_nil(List.keyfind(apps, :ex_fdbmonitor, 0))
+        end
+      end)
+      |> Enum.flat_map(fn node ->
+        case :rpc.call(node, __MODULE__, :read!, []) do
+          {:badrpc, _} -> []
+          content -> [{node, content}]
+        end
+      end)
+      |> Enum.group_by(fn {_, y} -> y end, fn {x, _} -> x end)
+      |> Enum.to_list()
+
+    # Crash if there is more than 1 cluster file active in cluster
+    [{_content, [base_node | _]}] = grouped
+
+    Logger.notice("#{node()} joining via #{base_node}")
+    copy_from!(base_node)
   end
 
   def file(etc_dir) do

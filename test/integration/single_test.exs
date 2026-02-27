@@ -38,8 +38,10 @@ defmodule ExFdbmonitor.Integration.SingleTest do
 
     # Worker is alive under supervisor
     children = :rpc.call(node1, Supervisor, :which_children, [ExFdbmonitor.Supervisor])
+
     {ExFdbmonitor.Worker, worker_pid, :worker, _} =
       Enum.find(children, fn {id, _, _, _} -> id == ExFdbmonitor.Worker end)
+
     assert is_pid(worker_pid)
 
     # Read/write

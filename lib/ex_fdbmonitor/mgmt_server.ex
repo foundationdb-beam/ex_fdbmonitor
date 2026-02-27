@@ -224,8 +224,10 @@ defmodule ExFdbmonitor.MgmtServer do
         Logger.notice("#{node()} redundancy already #{current}, skipping #{mode}")
         {:reply, :ok, state}
       else
-        case fdbcli_configure_with_retry(mode) do
-          {:ok, _} -> {:reply, :ok, state}
+        with :ok <- await_servers(@min_nodes[mode]),
+             {:ok, _} <- fdbcli_exec(["configure", mode]) do
+          {:reply, :ok, state}
+        else
           {:error, _} = error -> {:reply, error, state}
         end
       end
@@ -297,24 +299,42 @@ defmodule ExFdbmonitor.MgmtServer do
     ExFdbmonitor.Fdbcli.exec(args)
   end
 
-  # fdbserver processes may not be visible to the cluster immediately after
-  # include. Retry configure up to 10 times with a 2s delay.
-  defp fdbcli_configure_with_retry(mode, attempts \\ 10) do
-    case fdbcli_exec(["configure", mode]) do
-      {:ok, _} = ok ->
-        ok
+  @server_list_prefix <<0xFF, "/serverList/">>
 
-      {:error, _} = error when attempts <= 1 ->
-        error
+  # After include, fdbservers may not be visible to the cluster controller
+  # immediately.  Poll \xff/serverList/ until at least `min_count` entries
+  # exist before attempting configure.
+  defp await_servers(min_count, timeout_ms \\ 20_000) do
+    db = :erlfdb.open(ExFdbmonitor.Cluster.file())
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_servers(db, min_count, deadline)
+  end
 
-      {:error, _} ->
-        Logger.notice(
-          "#{node()} configure #{mode} not ready, retrying in 2s (#{attempts - 1} left)"
-        )
+  defp do_await_servers(db, min_count, deadline) do
+    count = server_count(db)
 
-        Process.sleep(2_000)
-        fdbcli_configure_with_retry(mode, attempts - 1)
+    if count >= min_count do
+      Logger.notice("#{node()} #{count} servers available (need #{min_count})")
+      :ok
+    else
+      remaining = deadline - System.monotonic_time(:millisecond)
+
+      if remaining <= 0 do
+        {:error, {:timeout_awaiting_servers, count, min_count}}
+      else
+        Logger.notice("#{node()} waiting for servers: #{count}/#{min_count}")
+        Process.sleep(500)
+        do_await_servers(db, min_count, deadline)
+      end
     end
+  end
+
+  defp server_count(db) do
+    :erlfdb.transactional(db, fn tx ->
+      :ok = :erlfdb.set_option(tx, :read_system_keys)
+      kvs = :erlfdb.wait(:erlfdb.get_range_startswith(tx, @server_list_prefix))
+      length(kvs)
+    end)
   end
 
   defp set_coordinators(target_mode, nodes) do

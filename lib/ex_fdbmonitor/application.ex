@@ -96,7 +96,7 @@ defmodule ExFdbmonitor.Application do
 
     cluster_file =
       if fdb_peers != [] do
-        :ok = ExFdbmonitor.autojoin!(fdb_peers)
+        :ok = ExFdbmonitor.Cluster.join!(fdb_peers)
         ExFdbmonitor.Cluster.file()
       else
         cluster_assigns =

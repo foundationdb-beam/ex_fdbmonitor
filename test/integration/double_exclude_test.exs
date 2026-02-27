@@ -46,14 +46,21 @@ defmodule ExFdbmonitor.Integration.DoubleExcludeTest do
 
     # ── Phase 2: Scale down to single ──
     Logger.notice("Phase 2: scale_down, removing node2 and node3")
+
     {:ok, removed} =
       :rpc.call(node1, ExFdbmonitor.MgmtServer, :scale_down, [[node2, node3]])
+
     Logger.notice("Phase 2: scale_down returned, removed: #{inspect(removed)}")
 
     # Stop workers on removed nodes
     for node <- [node2, node3] do
-      :ok = :rpc.call(node, Supervisor, :terminate_child, [ExFdbmonitor.Supervisor, ExFdbmonitor.Worker])
+      :ok =
+        :rpc.call(node, Supervisor, :terminate_child, [
+          ExFdbmonitor.Supervisor,
+          ExFdbmonitor.Worker
+        ])
     end
+
     Logger.notice("Phase 2: workers stopped on node2 and node3")
 
     # Verify reads/writes on node1
@@ -75,8 +82,10 @@ defmodule ExFdbmonitor.Integration.DoubleExcludeTest do
 
     # ── Phase 3: Scale back up to double ──
     Logger.notice("Phase 3: restarting workers on node2 and node3")
+
     for node <- [node2, node3] do
-      {:ok, _} = :rpc.call(node, Supervisor, :restart_child, [ExFdbmonitor.Supervisor, ExFdbmonitor.Worker])
+      {:ok, _} =
+        :rpc.call(node, Supervisor, :restart_child, [ExFdbmonitor.Supervisor, ExFdbmonitor.Worker])
     end
 
     Logger.notice("Phase 3: scale_up to double, including node2 and node3")

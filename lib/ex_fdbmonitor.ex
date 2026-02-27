@@ -37,34 +37,35 @@ defmodule ExFdbmonitor do
   """
   def open_db(input \\ nil), do: ExFdbmonitor.Cluster.open_db(input)
 
-  @doc false
-  def autojoin!(nodes) do
-    grouped_cluster_file_contents =
-      nodes
-      |> Enum.filter(fn node ->
-        case :rpc.call(node, Application, :started_applications, []) do
-          {:badrpc, _} -> false
-          applications -> not is_nil(List.keyfind(applications, :ex_fdbmonitor, 0))
-        end
-      end)
-      |> Enum.flat_map(fn node ->
-        case :rpc.call(node, ExFdbmonitor.Cluster, :read!, []) do
-          {:badrpc, _} -> []
-          content -> [{node, content}]
-        end
-      end)
-      |> Enum.group_by(fn {_, y} -> y end, fn {x, _} -> x end)
-      |> Enum.to_list()
+  @moduledoc """
+  Public API for managing a node's membership in a FoundationDB cluster.
+  """
 
-    # Crash if there is more than 1 cluster file active in cluster
-    [{_content, [base_node | _]}] = grouped_cluster_file_contents
+  @doc """
+  Gracefully remove the current node from the cluster.
 
-    Logger.notice("#{node()} joining via #{base_node}")
-    :ok = ExFdbmonitor.Cluster.copy_from!(base_node)
-    :ok
-  end
+  Executes `MgmtServer.scale_down/1` which, under the DGenServer lock:
 
-  def leave() do
+  1. Downgrades the redundancy mode if the remaining nodes can no longer
+     sustain it (e.g. triple → double when dropping below 5 nodes).
+  2. Reassigns coordinators to surviving nodes.
+  3. Excludes this node's FDB processes (blocks until data is fully moved).
+
+  If the exclude succeeds the local `ExFdbmonitor.Worker` is terminated
+  so that `fdbmonitor` and its `fdbserver` processes are stopped.
+
+  Returns `:ok` on success or `{:error, reason}` if the scale-down fails
+  (in which case the worker is left running).
+
+  ## Rejoining after leave
+
+  Restart the `:ex_fdbmonitor` application.  The bootstrap flow will
+  detect that data files already exist, skip the initial configure,
+  and call `MgmtServer.scale_up/2` which includes the node back into
+  FDB and reconfigures the redundancy mode if the cluster now has
+  enough nodes.
+  """
+  def leave do
     node_name = node()
     Logger.notice("#{node_name} leaving")
 
