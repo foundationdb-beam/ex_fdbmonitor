@@ -1,20 +1,42 @@
 # ExFdbmonitor
 
+An Elixir application that manages [FoundationDB](https://www.foundationdb.org/)
+clusters using the BEAM's distributed capabilities.
+
 <!-- MDOC !-->
 
-ExFdbmonitor is an Elixir application that manages the starting and stopping of
-`fdbmonitor`, which is the management process for FoundationDB.
+ExFdbmonitor starts and supervises `fdbmonitor` (the FoundationDB management
+process), bootstraps new clusters, and handles scaling operations — all
+coordinated across nodes via Erlang distribution.
 
-The goal of ExFdbmonitor is to allow a FoundationDB cluster to bootstrap itself
-using the distributed capabilities of the Erlang VM.
+## How it works
 
-With a correctly crafted set of application environment variables, a cluster
-can be brought up from zero as long as each node is started individually.
+1. **First node** — detects that no FDB peers exist, creates the cluster file,
+   writes a `foundationdb.conf`, and runs `configure new single <storage_engine>`.
+2. **Subsequent nodes** — discover existing peers via `:erlang.nodes()`, copy
+   the cluster file, and join the cluster.
+3. **Redundancy** — once enough nodes are registered, `scale_up` configures
+   coordinators and the declared redundancy mode (`"double"`, `"triple"`).
+4. **Restarts** — on restart the bootstrap config is ignored (data files
+   already exist). The node re-includes itself if necessary and re-evaluates
+   redundancy automatically.
 
-Once the cluster is established, node restarts are equivalent to restarts of
-`fdbmonitor` itself.
+All mutating FDB operations are serialized through `ExFdbmonitor.MgmtServer`, a
+[DGenServer](https://github.com/foundationdb-beam/dgen) backed by FDB itself.
+This prevents concurrent `fdbcli` commands from interleaving across nodes.
 
-## Configuration of `:ex_fdbmonitor`
+## Requirements
+
+- Elixir ~> 1.18
+- FoundationDB client and server packages
+  ([releases](https://github.com/apple/foundationdb/releases))
+
+## Usage
+
+See [examples/example_app/README.md](examples/example_app/README.md) for a tutorial on
+using ExFdbmonitor in your application.
+
+## Configuration
 
 ### FDB executable paths
 
@@ -31,42 +53,155 @@ config :ex_fdbmonitor,
        dr_agent: "/usr/local/bin/dr_agent"
 ```
 
-### FDB cluster configuration
-
-The env vars `:etc_dir` and `:run_dir` are used on every boot.
+### Minimal (single-node dev)
 
 ```elixir
-database_path = "/var/lib/myapp/data/fdb"
+# config/dev.exs
+import Config
 
 config :ex_fdbmonitor,
-  etc_dir: Path.join(database_path, "etc"),
-  run_dir: Path.join(database_path, "run")
-```
+  etc_dir: ".my_app/dev/fdb/etc",
+  run_dir: ".my_app/dev/fdb/run"
 
-The `:bootstrap` env var is used only on first boot of each node in the cluster.
-Once a cluster is established, it is ignored on all subsequent boots. A simple
-example is shown here.
-
-```elixir
 config :ex_fdbmonitor,
   bootstrap: [
-    cluster: [
-      coordinator_addr: "127.0.0.1"
-    ],
     conf: [
-      data_dir: Path.join(database_path, "data"),
-      log_dir: Path.join(database_path, "log"),
-      fdbservers: [
-        [port: 5000]
-      ]
-    ],
-    fdbcli: ~w[configure new single ssd-redwood-1]
+      data_dir: ".my_app/dev/fdb/data",
+      log_dir: ".my_app/dev/fdb/log",
+      fdbservers: [[port: 5000]]
+    ]
   ]
 ```
 
-<!-- MDOC !-->
+### Multi-node production
 
-## Usage
+```elixir
+# config/runtime.exs
+import Config
 
-See [examples/example_app/README.md](examples/example_app/README.md) for a tutorial on
-using ExFdbmonitor in your application.
+addr = fn interface ->
+  {:ok, addrs} = :inet.getifaddrs()
+  :proplists.get_value(to_charlist(interface), addrs)[:addr]
+  |> :inet.ntoa()
+  |> to_string()
+end
+
+config :ex_fdbmonitor,
+  etc_dir: "/var/lib/my_app/fdb/etc",
+  run_dir: "/var/lib/my_app/fdb/run"
+
+config :ex_fdbmonitor,
+  bootstrap: [
+  
+    # nodes must communicate with coordinators over the
+    # network interface
+    cluster: [coordinator_addr: addr.("eth0")],
+    
+    conf: [
+      data_dir: "/var/lib/my_app/fdb/data",
+      log_dir: "/var/lib/my_app/fdb/log",
+      storage_engine: "ssd-2",
+      
+      # We're defining 2 fdbservers per node
+      fdbservers: [[port: 4500], [port: 4501]],
+      
+      # When safe to do so, ex_fdbmonitor will upgrade
+      # to 'double' redunancy automatically
+      redundancy_mode: "double"
+    ]
+  ]
+```
+
+### Configuration reference
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `:etc_dir` | yes | Directory for `fdb.cluster` and `foundationdb.conf` |
+| `:run_dir` | yes | Directory for `fdbmonitor` pid file |
+| `:bootstrap` | no | Bootstrap config (ignored after first successful start) |
+
+**Bootstrap keys:**
+
+| Key | Description |
+|-----|-------------|
+| `cluster: [coordinator_addr:]` | IP address for the initial coordinator (default `"127.0.0.1"`) |
+| `conf: [data_dir:]` | FDB data directory |
+| `conf: [log_dir:]` | FDB log directory |
+| `conf: [storage_engine:]` | Storage engine (default `"ssd-2"`) |
+| `conf: [fdbservers:]` | List of `[port: N]` keyword lists, one per `fdbserver` process |
+| `conf: [redundancy_mode:]` | `"single"`, `"double"`, or `"triple"` (default: `nil` / single) |
+| `fdbcli:` | Extra `fdbcli` args to run at bootstrap (optional, repeatable) |
+
+## Bootstrap flow
+
+On application start, ExFdbmonitor runs two phases:
+
+**Phase 1** (before any processes start):
+- If the conf file and data dir are empty (first boot), write config files.
+  If FDB peers exist on `:erlang.nodes()`, copy their cluster file.
+  Otherwise, create a new cluster file and generate `configure new single <engine>`.
+- If files already exist (restart), skip — use existing cluster file.
+
+**Phase 2** (after `fdbmonitor` / `fdbserver` are running):
+- Start `ExFdbmonitor.MgmtServer` (connects to FDB for distributed coordination).
+- Register this node's `machine_id`.
+- Call `scale_up(redundancy_mode, [node()])` — includes the node back
+  into FDB and configures redundancy when enough nodes are present.
+
+## Public API
+
+### `ExFdbmonitor.leave/0`
+
+Gracefully remove the current node from the cluster. Downgrades redundancy
+if needed, reassigns coordinators, excludes the node (blocks until data is
+moved), and stops the local `fdbmonitor`. To rejoin, restart the
+`:ex_fdbmonitor` application.
+
+### Redundancy modes
+
+| Mode | Min nodes | Min coordinators |
+|------|-----------|------------------|
+| `"single"` | 1 | 1 |
+| `"double"` | 3 | 3 |
+| `"triple"` | 5 | 5 |
+
+`scale_up` stores the declared mode as a ceiling. `scale_down`
+auto-determines the highest mode the surviving nodes can support, capped
+at that ceiling. This prevents a scale-down/scale-up cycle from
+accidentally exceeding the operator's intent.
+
+## Scaling example
+
+When a node is gracefully shutting down,
+
+```elixir
+# On the departing node:
+ExFdbmonitor.leave()
+```
+
+When a node is returning from previously having been gracefully shutdown,
+
+```elixir
+# Later, restart the :ex_fdbmonitor application to rejoin:
+Application.stop(:ex_fdbmonitor)
+Application.ensure_all_started(:ex_fdbmonitor)
+```
+
+## Testing
+
+ExFdbmonitor provides sandbox modules for integration testing:
+
+```elixir
+# Single-node sandbox
+sandbox = ExFdbmonitor.Sandbox.Single.checkout("my-test", starting_port: 5000)
+# ... run tests ...
+ExFdbmonitor.Sandbox.Single.checkin(sandbox, drop?: true)
+
+# 3-node double-redundancy sandbox
+sandbox = ExFdbmonitor.Sandbox.Double.checkout("my-test", starting_port: 5500)
+# ... run tests ...
+ExFdbmonitor.Sandbox.Double.checkin(sandbox, drop?: true)
+```
+
+Sandboxes start isolated `local_cluster` nodes with their own FDB
+processes. Pass `drop?: true` to delete all data on checkin.

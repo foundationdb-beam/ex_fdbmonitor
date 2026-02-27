@@ -23,26 +23,18 @@ defmodule ExFdbmonitor.Sandbox.Double do
 
     [
       bootstrap: [
-        cluster:
-          if(x > 0,
-            do: :autojoin,
-            else: [
-              coordinator_addr: "127.0.0.1"
-            ]
-          ),
+        cluster: [],
         conf:
           Keyword.merge(
             [
               data_dir: Sandbox.data_dir(name, x),
               log_dir: Sandbox.log_dir(name, x),
-              fdbservers: for(pidx <- 0..(m - 1), do: [port: starting_port + (x * m + pidx)])
+              fdbservers: for(pidx <- 0..(m - 1), do: [port: starting_port + (x * m + pidx)]),
+              storage_engine: "ssd-2",
+              redundancy_mode: "double"
             ],
             conf_assigns
-          ),
-        fdbcli:
-          if(x == 0, do: ~w[configure new single ssd-redwood-1 tenant_mode=optional_experimental]),
-        fdbcli: if(x == 2, do: ~w[configure double]),
-        fdbcli: if(x == 2, do: ~w[coordinators auto])
+          )
       ],
       etc_dir: Sandbox.etc_dir(name, x),
       run_dir: Sandbox.run_dir(name, x)

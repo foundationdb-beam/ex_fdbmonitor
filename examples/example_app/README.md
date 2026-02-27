@@ -88,7 +88,7 @@ databases that are ephemeral and safe to delete at any time.
 #### Configure ex_fdbmonitor
 
 When your app is running with this config, it will start a single fdbserver process
-and it will listen on port 5000. It uses the ssd-redwood-1 storage engine.
+and it will listen on port 5000. It uses the ssd-2 storage engine.
 
 ```elixir
 # config/dev.exs
@@ -100,17 +100,13 @@ config :ex_fdbmonitor,
 
 config :ex_fdbmonitor,
   bootstrap: [
-    cluster: [
-      coordinator_addr: "127.0.0.1"
-    ],
     conf: [
       data_dir: ".example_app/dev/fdb/data",
       log_dir: ".example_app/dev/fdb/log",
       fdbservers: [
         [port: 5000]
       ]
-    ],
-    fdbcli: ~w[configure new single ssd-redwood-1]
+    ]
   ]
 ```
 
@@ -331,39 +327,31 @@ config :ex_fdbmonitor,
   etc_dir: Path.join(database_path, "etc"),
   run_dir: Path.join(database_path, "run")
 
-node_idx = String.to_integer(System.fetch_env!("EXAMPLE_APP_NODE_IDX"))
-node_count = String.to_integer(System.fetch_env!("EXAMPLE_APP_NODE_COUNT"))
-interface = System.get_env("EXAMPLE_APP_COORDINATOR_IF") || "en0"
+interface = System.get_env("EXAMPLE_APP_COORDINATOR_IF", "en0")
 
-addr_fn = fn if ->
-   {:ok, addrs} = :inet.getifaddrs()
+{:ok, addrs} = :inet.getifaddrs()
 
-   addrs
-   |> then(&:proplists.get_value(~c"#{if}", &1))
-   |> then(&:proplists.get_all_values(:addr, &1))
-   |> Enum.filter(&(tuple_size(&1) == 4))
-   |> hd()
-   |> :inet.ntoa()
-   |> to_string()
-end
+coordinator_addr =
+  addrs
+  |> then(&:proplists.get_value(~c"#{interface}", &1))
+  |> then(&:proplists.get_all_values(:addr, &1))
+  |> Enum.filter(&(tuple_size(&1) == 4))
+  |> hd()
+  |> :inet.ntoa()
+  |> to_string()
 
 config :ex_fdbmonitor,
   bootstrap: [
-    cluster:
-    if(node_idx > 0,
-      do: :autojoin,
-      else: [
-        coordinator_addr: addr_fn.(interface)
-      ]
-    ),
-    conf: [
-      data_dir: Path.join(database_path, "data"),
-      log_dir: Path.join(database_path, "log"),
-      fdbservers: [[port: 4500], [port: 4501]]
+    cluster: [
+      coordinator_addr: coordinator_addr
     ],
-    fdbcli: if(node_idx == 0, do: ~w[configure new single ssd-redwood-1]),
-    fdbcli: if(node_idx == 2, do: ~w[configure double]),
-    fdbcli: if(node_idx == node_count - 1, do: ~w[coordinators auto])
+    conf: [
+      data_dir: "/var/lib/example_app/data/fdb/data",
+      log_dir: "/var/lib/example_app/data/fdb/log",
+      storage_engine: "ssd-2",
+      fdbservers: [port: 4500, port: 4501],
+      redundancy_mode: "double"
+    ]
   ]
 ```
 
@@ -371,7 +359,7 @@ and prod.exs:
 
 ```elixir
 # config/prod.exs
-config :livesecret, LiveSecret.Repo,
+config :example_app, ExampleApp.Repo,
   open_db: &ExFdbmonitor.open_db/1
 # ...
 ```
@@ -381,12 +369,11 @@ order to form the cluster on first boot. So your nodes must be able to reach eac
 
 On first bring-up, nodes should be started individually and serially.
 
-Once a given node has been started, the `bootstrap` config, will be ignored on all subsequent restarts,
-in which `:etc_dir` and `:run_dir` are used.
+Once a given node has been started, the `bootstrap` config will be ignored on all subsequent restarts.
 
-The example config above uses a per-node index value to control the sequence of commands in the bootstrap,
-and assumes the nodes will start in the correct order. Feel free to use some other piece of data convenient
-to your deployment procedure.
+The first node to start (with no connected peers) will create the cluster and run
+`configure new single <storage_engine>`. Subsequent nodes will automatically join via
+the existing peers. Once enough nodes are registered, `redundancy_mode` takes effect.
 
 ### Schemas and Migrations
 
