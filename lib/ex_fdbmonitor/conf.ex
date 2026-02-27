@@ -18,17 +18,18 @@ defmodule ExFdbmonitor.Conf do
     Keyword.merge(default_assigns(), conf_assigns)
   end
 
-  def write!(conffile, assigns) do
-    {content, resolved} = render(assigns)
+  def write!(conffile, conf_assigns) do
+    resolved = assigns(conf_assigns)
+    content = render(resolved)
     File.write!(conffile, content)
 
     {conffile, resolved}
   end
 
-  def render(assigns) do
+  def render(resolved_assigns) do
     eex_file = Path.join([:code.priv_dir(:ex_fdbmonitor), @foundationdb_conf_eex])
 
-    EEx.eval_file(eex_file, assigns: assigns)
+    EEx.eval_file(eex_file, assigns: resolved_assigns)
   end
 
   defp default_assigns() do

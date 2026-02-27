@@ -3,6 +3,8 @@
 An Elixir application that manages [FoundationDB](https://www.foundationdb.org/)
 clusters using the BEAM's distributed capabilities.
 
+<!-- MDOC !-->
+
 ExFdbmonitor starts and supervises `fdbmonitor` (the FoundationDB management
 process), bootstraps new clusters, and handles scaling operations — all
 coordinated across nodes via Erlang distribution.
@@ -19,7 +21,22 @@ coordinated across nodes via Erlang distribution.
    already exist). The node re-includes itself and re-evaluates redundancy
    automatically.
 
-## Configuration of `:ex_fdbmonitor`
+All mutating FDB operations are serialized through `ExFdbmonitor.MgmtServer`, a
+[DGenServer](https://github.com/foundationdb-beam/dgen) backed by FDB itself.
+This prevents concurrent `fdbcli` commands from interleaving across nodes.
+
+## Requirements
+
+- Elixir ~> 1.18
+- FoundationDB client and server packages
+  ([releases](https://github.com/apple/foundationdb/releases))
+
+## Usage
+
+See [examples/example_app/README.md](examples/example_app/README.md) for a tutorial on
+using ExFdbmonitor in your application.
+
+## Configuration
 
 ### FDB executable paths
 
@@ -35,25 +52,6 @@ config :ex_fdbmonitor,
        backup_agent: "/usr/local/foundationdb/backup_agent/backup_agent",
        dr_agent: "/usr/local/bin/dr_agent"
 ```
-
-<!-- MDOC !-->
-
-## Usage
-
-See [examples/example_app/README.md](examples/example_app/README.md) for a tutorial on
-using ExFdbmonitor in your application.
-
-All mutating FDB operations are serialized through `ExFdbmonitor.MgmtServer`, a
-[DGenServer](https://github.com/foundationdb-beam/dgen) backed by FDB itself.
-This prevents concurrent `fdbcli` commands from interleaving across nodes.
-
-## Requirements
-
-- Elixir ~> 1.18
-- FoundationDB client and server packages
-  ([releases](https://github.com/apple/foundationdb/releases))
-
-## Configuration
 
 ### Minimal (single-node dev)
 

@@ -115,6 +115,7 @@ defmodule ExFdbmonitor.Application do
       |> Keyword.merge(data_dir: data_dir, log_dir: log_dir, cluster_file: cluster_file)
 
     {_conffile, resolved} = ExFdbmonitor.Conf.write!(conffile, conf_assigns)
+    check_config()
 
     storage_engine = bootstrap_config[:conf][:storage_engine] || "ssd-2"
 
@@ -170,6 +171,48 @@ defmodule ExFdbmonitor.Application do
     :ok = ExFdbmonitor.MgmtServer.scale_up(redundancy_mode, [node()])
 
     :ignore
+  end
+
+  defp check_config() do
+    check_config? = Application.get_env(:ex_fdbmonitor, :check_config, true)
+
+    if check_config? do
+      start_os_mon()
+
+      system_memory_data = :memsup.get_system_memory_data()
+      system_total_memory = system_memory_data[:system_total_memory]
+
+      system_memory_threshold_GB = 8
+
+      if system_total_memory < system_memory_threshold_GB * 1_000_000_000 do
+        Logger.warning("""
+        System memory is less than #{system_memory_threshold_GB}GB. \
+        FoundationDB is tuned for systems that can allocate #{system_memory_threshold_GB}GB of system memory per core/disk.
+        """)
+      end
+    end
+  end
+
+  defp start_os_mon() do
+    already_started? =
+      :application.which_applications()
+      |> then(&:lists.keyfind(:os_mon, 1, &1))
+      |> is_tuple()
+
+    if !already_started? do
+      :application.load(:os_mon)
+
+      [
+        disk_almost_full_threshold: 1.0,
+        system_memory_high_watermark: 1.0,
+        process_memory_high_watermark: 1.0
+      ]
+      |> Enum.each(&:application.set_env(:os_mon, elem(&1, 0), elem(&1, 1)))
+
+      {:ok, _} = :application.ensure_all_started(:os_mon)
+    end
+
+    !already_started?
   end
 
   defp ensure_mgmt_server(cluster_file) do

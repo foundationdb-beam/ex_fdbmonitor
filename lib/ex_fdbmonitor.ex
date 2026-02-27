@@ -37,10 +37,6 @@ defmodule ExFdbmonitor do
   """
   def open_db(input \\ nil), do: ExFdbmonitor.Cluster.open_db(input)
 
-  @moduledoc """
-  Public API for managing a node's membership in a FoundationDB cluster.
-  """
-
   @doc """
   Gracefully remove the current node from the cluster.
 
@@ -51,7 +47,7 @@ defmodule ExFdbmonitor do
   2. Reassigns coordinators to surviving nodes.
   3. Excludes this node's FDB processes (blocks until data is fully moved).
 
-  If the exclude succeeds the local `ExFdbmonitor.Worker` is terminated
+  If the exclude succeeds the local worker is terminated
   so that `fdbmonitor` and its `fdbserver` processes are stopped.
 
   Returns `:ok` on success or `{:error, reason}` if the scale-down fails

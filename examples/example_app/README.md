@@ -331,26 +331,23 @@ config :ex_fdbmonitor,
   etc_dir: Path.join(database_path, "etc"),
   run_dir: Path.join(database_path, "run")
 
-node_idx = String.to_integer(System.fetch_env!("EXAMPLE_APP_NODE_IDX"))
-node_count = String.to_integer(System.fetch_env!("EXAMPLE_APP_NODE_COUNT"))
-interface = System.get_env("EXAMPLE_APP_COORDINATOR_IF") || "en0"
+interface = System.get_env("EXAMPLE_APP_COORDINATOR_IF", "en0")
 
-addr_fn = fn if ->
-   {:ok, addrs} = :inet.getifaddrs()
+{:ok, addrs} = :inet.getifaddrs()
 
-   addrs
-   |> then(&:proplists.get_value(~c"#{if}", &1))
-   |> then(&:proplists.get_all_values(:addr, &1))
-   |> Enum.filter(&(tuple_size(&1) == 4))
-   |> hd()
-   |> :inet.ntoa()
-   |> to_string()
-end
+coordinator_addr =
+  addrs
+  |> then(&:proplists.get_value(~c"#{interface}", &1))
+  |> then(&:proplists.get_all_values(:addr, &1))
+  |> Enum.filter(&(tuple_size(&1) == 4))
+  |> hd()
+  |> :inet.ntoa()
+  |> to_string()
 
 config :ex_fdbmonitor,
   bootstrap: [
     cluster: [
-      coordinator_addr: addr_fn.("en0")
+      coordinator_addr: coordinator_addr
     ],
     conf: [
       data_dir: "/var/lib/example_app/data/fdb/data",
@@ -366,7 +363,7 @@ and prod.exs:
 
 ```elixir
 # config/prod.exs
-config :livesecret, LiveSecret.Repo,
+config :example_app, ExampleApp.Repo,
   open_db: &ExFdbmonitor.open_db/1
 # ...
 ```
