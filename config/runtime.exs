@@ -22,7 +22,6 @@ if config_env() == :prod do
     run_dir: Path.join(database_path, "run")
 
   node_idx = String.to_integer(System.get_env("NODE_IDX") || "0")
-  node_count = String.to_integer(System.get_env("NODE_COUNT") || "1")
   interface = System.get_env("COORDINATOR_IF") || "lo"
 
   addr_fn = fn if ->
@@ -49,15 +48,11 @@ if config_env() == :prod do
       conf: [
         data_dir: Path.join(database_path, "data"),
         log_dir: Path.join(database_path, "log"),
-        memory: System.get_env("FDBSERVER_MEMORY") || nil,
-        cache_memory: System.get_env("FDBSERVER_CACHE_MEMORY") || nil,
+        memory: System.get_env("FDBSERVER_MEMORY"),
+        cache_memory: System.get_env("FDBSERVER_CACHE_MEMORY"),
+        storage_engine: System.get_env("FDB_STORAGE_ENGINE") || "ssd-redwood-1",
+        redundancy_mode: System.get_env("FDB_REDUNDANCY_MODE"),
         fdbservers: [[port: 4500]]
-      ],
-      fdbcli:
-        if(node_idx == 0,
-          do: ~w[configure new single #{System.get_env("FDB_STORAGE_ENGINE") || "ssd-redwood-1"}]
-        ),
-      fdbcli: if(node_idx == 2, do: ~w[configure double]),
-      fdbcli: if(node_idx == node_count - 1, do: ~w[coordinators auto])
+      ]
     ]
 end
