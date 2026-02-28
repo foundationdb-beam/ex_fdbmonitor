@@ -43,7 +43,7 @@ if config_env() == :prod do
         log_dir: Path.join(database_path, "log"),
         memory: System.get_env("FDBSERVER_MEMORY"),
         cache_memory: System.get_env("FDBSERVER_CACHE_MEMORY"),
-        storage_engine: System.get_env("FDB_STORAGE_ENGINE") || "ssd-redwood-1",
+        storage_engine: System.get_env("FDB_STORAGE_ENGINE") || "ssd-2",
         redundancy_mode: System.get_env("FDB_REDUNDANCY_MODE"),
         fdbservers: [[port: 4500]]
       ]
