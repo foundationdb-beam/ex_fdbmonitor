@@ -21,7 +21,6 @@ if config_env() == :prod do
     etc_dir: Path.join(database_path, "etc"),
     run_dir: Path.join(database_path, "run")
 
-  node_idx = String.to_integer(System.get_env("NODE_IDX") || "0")
   interface = System.get_env("COORDINATOR_IF") || "lo"
 
   addr_fn = fn if ->
@@ -38,13 +37,7 @@ if config_env() == :prod do
 
   config :ex_fdbmonitor,
     bootstrap: [
-      cluster:
-        if(node_idx > 0,
-          do: :autojoin,
-          else: [
-            coordinator_addr: addr_fn.(interface)
-          ]
-        ),
+      cluster: [coordinator_addr: addr_fn.(interface)],
       conf: [
         data_dir: Path.join(database_path, "data"),
         log_dir: Path.join(database_path, "log"),
