@@ -37,7 +37,7 @@ defmodule ExFdbmonitor.Application do
   defp worker?() do
     case {Application.fetch_env(:ex_fdbmonitor, :etc_dir),
           Application.fetch_env(:ex_fdbmonitor, :run_dir)} do
-      {{ok, _}, {ok, _}} ->
+      {{:ok, _}, {:ok, _}} ->
         true
 
       _ ->
