@@ -83,12 +83,12 @@ defmodule ExFdbmonitor.Sandbox do
     :ok = LocalCluster.stop(cluster)
 
     if drop? do
-      Enum.map(nodes, fn %Node{
-                           etc_dir: etc_dir,
-                           run_dir: run_dir,
-                           data_dir: data_dir,
-                           log_dir: log_dir
-                         } ->
+      Enum.each(nodes, fn %Node{
+                            etc_dir: etc_dir,
+                            run_dir: run_dir,
+                            data_dir: data_dir,
+                            log_dir: log_dir
+                          } ->
         for dir <- [etc_dir, run_dir, data_dir, log_dir] do
           if !is_nil(dir), do: File.rm_rf!(dir)
         end

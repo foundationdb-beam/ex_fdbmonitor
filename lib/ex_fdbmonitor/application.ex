@@ -194,12 +194,12 @@ defmodule ExFdbmonitor.Application do
       system_memory_data = :memsup.get_system_memory_data()
       system_total_memory = system_memory_data[:system_total_memory]
 
-      system_memory_threshold_GB = 8
+      system_memory_threshold_gb = 8
 
-      if system_total_memory < system_memory_threshold_GB * 1_000_000_000 do
+      if system_total_memory < system_memory_threshold_gb * 1_000_000_000 do
         Logger.warning("""
-        System memory is less than #{system_memory_threshold_GB}GB. \
-        FoundationDB is tuned for systems that can allocate #{system_memory_threshold_GB}GB of system memory per core/disk.
+        System memory is less than #{system_memory_threshold_gb}GB. \
+        FoundationDB is tuned for systems that can allocate #{system_memory_threshold_gb}GB of system memory per core/disk.
         """)
       end
     end
