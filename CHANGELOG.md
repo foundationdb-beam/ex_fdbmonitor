@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.1 (TBD)
+
+### Fixes
+
+- Fixed `:crypto` and `:eex` missing from release by adding them to `extra_applications`.
+- Fixed `runtime.exs` network interface lookup to fall back to `iface0` (e.g. `lo0` on macOS).
+- Fixed FDB binary paths on Linux: defaults now resolve correctly for both Darwin and Linux via the new `ExFdbmonitor.Binaries` module.
+
+### Improvements
+
+- Clearer error message when a node fails to start because it was registered under a different name during initial bootstrap.
+- Added GitHub Actions CI with lint and test jobs.
+
 ## v0.2.0 (2026-02-27)
 
 ### Breaking Changes

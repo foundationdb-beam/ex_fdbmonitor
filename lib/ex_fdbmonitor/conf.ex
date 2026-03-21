@@ -1,18 +1,9 @@
 defmodule ExFdbmonitor.Conf do
   @moduledoc false
   @foundationdb_conf_eex "foundationdb.conf.eex"
-  defp fdbserver(),
-    do: Application.get_env(:ex_fdbmonitor, :fdbserver, "/usr/local/libexec/fdbserver")
-
-  defp backup_agent(),
-    do:
-      Application.get_env(
-        :ex_fdbmonitor,
-        :backup_agent,
-        "/usr/local/foundationdb/backup_agent/backup_agent"
-      )
-
-  defp dr_agent(), do: Application.get_env(:ex_fdbmonitor, :dr_agent, "/usr/local/bin/dr_agent")
+  defp fdbserver(), do: ExFdbmonitor.Binaries.fdbserver()
+  defp backup_agent(), do: ExFdbmonitor.Binaries.backup_agent()
+  defp dr_agent(), do: ExFdbmonitor.Binaries.dr_agent()
 
   def assigns(conf_assigns) do
     Keyword.merge(default_assigns(), conf_assigns)

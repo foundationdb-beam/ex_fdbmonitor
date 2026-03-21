@@ -2,7 +2,7 @@ defmodule ExFdbmonitor.Fdbcli do
   @moduledoc """
   This module provides functions for executing fdbcli commands.
   """
-  defp fdbcli(), do: Application.get_env(:ex_fdbmonitor, :fdbcli, "/usr/local/bin/fdbcli")
+  defp fdbcli(), do: ExFdbmonitor.Binaries.fdbcli()
 
   def exec(fdbcli_exec) do
     exec(fdbcli(), ExFdbmonitor.Cluster.file(), fdbcli_exec)

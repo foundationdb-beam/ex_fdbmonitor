@@ -1,7 +1,6 @@
 defmodule ExFdbmonitor.Worker do
   @moduledoc false
-  defp fdbmonitor(),
-    do: Application.get_env(:ex_fdbmonitor, :fdbmonitor, "/usr/local/libexec/fdbmonitor")
+  defp fdbmonitor(), do: ExFdbmonitor.Binaries.fdbmonitor()
 
   def child_spec(init_arg) do
     default = %{

@@ -4,7 +4,7 @@ defmodule ExFdbmonitor.Fdbdr do
   @moduledoc """
   This module provides functions for executing fdbdr commands.
   """
-  defp fdbdr(), do: Application.get_env(:ex_fdbmonitor, :fdbdr, "/usr/local/bin/fdbdr")
+  defp fdbdr(), do: ExFdbmonitor.Binaries.fdbdr()
 
   def exec(command, source, destination) do
     exec(fdbdr(), ["#{command}", "--source", source, "--destination", destination])

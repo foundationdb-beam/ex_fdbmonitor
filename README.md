@@ -40,18 +40,30 @@ using ExFdbmonitor in your application.
 
 ### FDB executable paths
 
-If your FoundationDB installation is not in the default location, then you must set
-the following environment variables. The paths shown here are the defaults.
+ExFdbmonitor resolves FDB binary paths automatically based on the OS (Darwin and
+Linux are supported). If your installation is in a non-standard location, override
+any path explicitly:
 
-```
+```elixir
 config :ex_fdbmonitor,
-       fdbmonitor: "/usr/local/libexec/fdbmonitor",
-       fdbcli: "/usr/local/bin/fdbcli",
-       fdbserver: "/usr/local/libexec/fdbserver",
-       fdbdr: "/usr/local/bin/fdbdr",
-       backup_agent: "/usr/local/foundationdb/backup_agent/backup_agent",
-       dr_agent: "/usr/local/bin/dr_agent"
+  fdbmonitor: "/custom/path/fdbmonitor",
+  fdbcli: "/custom/path/fdbcli",
+  fdbserver: "/custom/path/fdbserver",
+  fdbdr: "/custom/path/fdbdr",
+  backup_agent: "/custom/path/backup_agent",
+  dr_agent: "/custom/path/dr_agent"
 ```
+
+Default paths by OS:
+
+| Binary | macOS | Linux |
+|--------|-------|-------|
+| `fdbmonitor` | `/usr/local/libexec/fdbmonitor` | `/usr/sbin/fdbmonitor` |
+| `fdbcli` | `/usr/local/bin/fdbcli` | `/usr/bin/fdbcli` |
+| `fdbserver` | `/usr/local/libexec/fdbserver` | `/usr/sbin/fdbserver` |
+| `fdbdr` | `/usr/local/bin/fdbdr` | `/usr/bin/fdbdr` |
+| `backup_agent` | `/usr/local/foundationdb/backup_agent/backup_agent` | `/usr/lib/foundationdb/backup_agent/backup_agent` |
+| `dr_agent` | `/usr/local/bin/dr_agent` | `/usr/lib/foundationdb/backup_agent/backup_agent` |
 
 ### Minimal (single-node dev)
 
