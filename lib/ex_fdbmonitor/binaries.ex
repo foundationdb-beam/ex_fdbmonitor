@@ -23,12 +23,12 @@ defmodule ExFdbmonitor.Binaries do
 
   | Binary | macOS | Linux |
   |--------|-------|-------|
-  | `fdbmonitor` | `/usr/local/libexec/fdbmonitor` | `/usr/sbin/fdbmonitor` |
+  | `fdbmonitor` | `/usr/local/libexec/fdbmonitor` | `/usr/lib/foundationdb/fdbmonitor` |
   | `fdbcli` | `/usr/local/bin/fdbcli` | `/usr/bin/fdbcli` |
   | `fdbserver` | `/usr/local/libexec/fdbserver` | `/usr/sbin/fdbserver` |
   | `fdbdr` | `/usr/local/bin/fdbdr` | `/usr/bin/fdbdr` |
   | `backup_agent` | `/usr/local/foundationdb/backup_agent/backup_agent` | `/usr/lib/foundationdb/backup_agent/backup_agent` |
-  | `dr_agent` | `/usr/local/bin/dr_agent` | `/usr/lib/foundationdb/backup_agent/backup_agent` |
+  | `dr_agent` | `/usr/local/bin/dr_agent` | `/usr/bin/dr_agent` |
   """
 
   @darwin %{
@@ -41,12 +41,12 @@ defmodule ExFdbmonitor.Binaries do
   }
 
   @linux %{
-    fdbmonitor: "/usr/sbin/fdbmonitor",
+    fdbmonitor: "/usr/lib/foundationdb/fdbmonitor",
     fdbcli: "/usr/bin/fdbcli",
     fdbserver: "/usr/sbin/fdbserver",
     fdbdr: "/usr/bin/fdbdr",
     backup_agent: "/usr/lib/foundationdb/backup_agent/backup_agent",
-    dr_agent: "/usr/lib/foundationdb/backup_agent/backup_agent"
+    dr_agent: "/usr/bin/dr_agent"
   }
 
   def fdbmonitor, do: resolve(:fdbmonitor)
