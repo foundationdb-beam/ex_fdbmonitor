@@ -168,7 +168,19 @@ defmodule ExFdbmonitor.Application do
       :ok = ExFdbmonitor.MgmtServer.register_node(machine_id, node())
     end
 
-    :ok = ExFdbmonitor.MgmtServer.scale_up(redundancy_mode, [node()])
+    case ExFdbmonitor.MgmtServer.scale_up(redundancy_mode, [node()]) do
+      :ok ->
+        :ok
+
+      {:error, {:unknown_nodes, nodes}} ->
+        raise """
+        Node #{inspect(hd(nodes))} is not registered in MgmtServer. \
+        This usually means either the initial bootstrap did not complete \
+        successfully, or the node name changed since the first boot. \
+        Clear the data directory and restart to re-bootstrap, or ensure \
+        the node is started with the same name it was originally registered with.\
+        """
+    end
 
     :ignore
   end
