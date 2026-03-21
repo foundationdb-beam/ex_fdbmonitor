@@ -233,6 +233,7 @@ defmodule ExFdbmonitor.Application do
         :ok
 
       nil ->
+        :ok = wait_for_database(cluster_file)
         db = :erlfdb.open(cluster_file)
         root = :erlfdb_directory.root()
         dir_name = Application.get_env(:ex_fdbmonitor, :dir, "ex_fdbmonitor")
@@ -245,6 +246,39 @@ defmodule ExFdbmonitor.Application do
           )
 
         :ok
+    end
+  end
+
+  # Poll `fdbcli status json` until client.database_status.available is true,
+  # or until we exhaust retries. Each probe gives fdbcli up to 10 s to connect
+  # (-t 10); fdbcli always emits valid JSON even when the cluster is down, so
+  # we parse the output rather than relying solely on the exit code.
+  defp wait_for_database(cluster_file, retries \\ 30, interval_ms \\ 2_000) do
+    available? =
+      case ExFdbmonitor.Fdbcli.exec(cluster_file, ["status", "json"], timeout: 10_000, stderr: false) do
+        {_, props} ->
+          stdout = props |> Keyword.get(:stdout, []) |> IO.iodata_to_binary()
+
+          match?(
+            {:ok, %{"client" => %{"database_status" => %{"available" => true}}}},
+            JSON.decode(stdout)
+          )
+
+        _ ->
+          false
+      end
+
+    cond do
+      available? ->
+        :ok
+
+      retries > 0 ->
+        Logger.debug("#{node()} waiting for FDB cluster to become available...")
+        Process.sleep(interval_ms)
+        wait_for_database(cluster_file, retries - 1, interval_ms)
+
+      true ->
+        raise "FDB cluster at #{cluster_file} did not become available."
     end
   end
 end

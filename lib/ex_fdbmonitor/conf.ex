@@ -30,6 +30,7 @@ defmodule ExFdbmonitor.Conf do
       dr_agent: dr_agent(),
       class: nil,
       machine_id: Base.encode16(:crypto.strong_rand_bytes(4)),
+      public_address: nil,
       data_hall: nil,
       datacenter_id: nil,
       memory: nil,

@@ -66,6 +66,7 @@ jobs:
           wget --quiet https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb
           sudo dpkg -i foundationdb-clients_${FDB_VERSION}-1_amd64.deb
           sudo dpkg -i foundationdb-server_${FDB_VERSION}-1_amd64.deb
+          sudo service foundationdb stop || true
       - run: mix deps.get --only test
       - run: mix deps.compile
       - run: mix compile

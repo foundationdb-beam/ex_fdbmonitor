@@ -31,7 +31,8 @@ defmodule ExFdbmonitor.Sandbox.Triple do
               log_dir: Sandbox.log_dir(name, x),
               fdbservers: for(pidx <- 0..(m - 1), do: [port: starting_port + (x * m + pidx)]),
               storage_engine: "ssd-2",
-              redundancy_mode: "triple"
+              redundancy_mode: "triple",
+              public_address: "127.0.0.1"
             ],
             conf_assigns
           )
