@@ -23,11 +23,25 @@ if config_env() == :prod do
 
   interface = System.get_env("COORDINATOR_IF") || "lo"
 
-  addr_fn = fn if ->
+  addr_fn = fn iface ->
     {:ok, addrs} = :inet.getifaddrs()
 
-    addrs
-    |> then(&:proplists.get_value(~c"#{if}", &1))
+    iface_data =
+      case :proplists.get_value(~c"#{iface}", addrs) do
+        :undefined ->
+          case :proplists.get_value(~c"#{iface}0", addrs) do
+            :undefined ->
+              raise "Network interface #{inspect(iface)} (or #{inspect(iface <> "0")}) not found. Set COORDINATOR_IF to the correct interface name."
+
+            data ->
+              data
+          end
+
+        data ->
+          data
+      end
+
+    iface_data
     |> then(&:proplists.get_all_values(:addr, &1))
     |> Enum.filter(&(tuple_size(&1) == 4))
     |> hd()

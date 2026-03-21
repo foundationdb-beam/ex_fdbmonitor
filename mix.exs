@@ -20,7 +20,7 @@ defmodule ExFdbmonitor.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :global_flags],
+      extra_applications: [:logger, :crypto, :eex, :global_flags],
       included_applications: [:os_mon],
       mod: {ExFdbmonitor.Application, []}
     ]
