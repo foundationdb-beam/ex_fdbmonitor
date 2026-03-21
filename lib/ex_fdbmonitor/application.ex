@@ -150,11 +150,53 @@ defmodule ExFdbmonitor.Application do
   # Returns :ignore so the supervisor treats this as a completed one-shot.
   @doc false
   def setup_cluster(cluster_file, fdbcli_cmds, machine_id, redundancy_mode) do
+    case wait_for_fdbserver() do
+      :ok -> :ok
+      :timeout ->
+        # fdbserver never appeared — dump diagnostics
+        {pgrep_mon, _} = System.cmd("pgrep", ["-a", "fdbmonitor"], stderr_to_stdout: true)
+        Logger.notice("#{node()} pgrep fdbmonitor: #{String.trim(pgrep_mon)}")
+
+        {pgrep_srv, _} = System.cmd("pgrep", ["-a", "fdbserver"], stderr_to_stdout: true)
+        Logger.notice("#{node()} pgrep fdbserver: #{String.trim(pgrep_srv)}")
+
+        # Try running fdbmonitor directly to see what happens
+        fdbmonitor_path = ExFdbmonitor.Binaries.fdbmonitor()
+        {test_output, test_exit} = System.cmd(fdbmonitor_path, ["--help"], stderr_to_stdout: true)
+        Logger.notice("#{node()} fdbmonitor --help exit=#{test_exit}: #{String.trim(test_output)}")
+
+        # Check file permissions
+        {ls_output, _} = System.cmd("ls", ["-la", fdbmonitor_path], stderr_to_stdout: true)
+        Logger.notice("#{node()} fdbmonitor permissions: #{String.trim(ls_output)}")
+
+        # Check what user we're running as
+        {whoami, _} = System.cmd("whoami", [], stderr_to_stdout: true)
+        Logger.notice("#{node()} running as user: #{String.trim(whoami)}")
+
+        log_dir = Application.get_env(:ex_fdbmonitor, :bootstrap)[:conf][:log_dir]
+        if log_dir do
+          case File.ls(log_dir) do
+            {:ok, files} ->
+              Logger.notice("#{node()} log_dir contents: #{inspect(files)}")
+              for f <- files do
+                content = File.read!(Path.join(log_dir, f))
+                Logger.notice("#{node()} log file #{f}:\n#{String.slice(content, 0, 2000)}")
+              end
+            {:error, reason} ->
+              Logger.notice("#{node()} log_dir #{log_dir} error: #{inspect(reason)}")
+          end
+        end
+
+        raise "fdbserver did not start within 10000ms. Check fdbmonitor logs."
+    end
+
     for cmd <- fdbcli_cmds do
       case cmd do
         ["configure", "new" | _] ->
           Logger.notice("#{node()} fdbcli local exec #{inspect(cmd)}")
-          {:ok, [stdout: _]} = ExFdbmonitor.Fdbcli.exec(cmd)
+          result = ExFdbmonitor.Fdbcli.exec(cluster_file, cmd)
+          Logger.notice("#{node()} fdbcli local result #{inspect(result)}")
+          {:ok, [stdout: _]} = result
 
         _ ->
           ensure_mgmt_server(cluster_file)
@@ -249,22 +291,46 @@ defmodule ExFdbmonitor.Application do
     end
   end
 
+  # Wait for fdbmonitor to spawn at least one fdbserver process.
+  # fdbmonitor forks fdbserver asynchronously after start_link returns,
+  # so on slower systems (e.g. CI) setup_cluster can run before the
+  # fdbserver process exists.
+  defp wait_for_fdbserver(retries \\ 50, interval_ms \\ 200) do
+    {output, _} = System.cmd("pgrep", ["-x", "fdbserver"], stderr_to_stdout: true)
+
+    cond do
+      String.trim(output) != "" ->
+        Logger.notice("#{node()} fdbserver is running")
+        :ok
+
+      retries > 0 ->
+        Process.sleep(interval_ms)
+        wait_for_fdbserver(retries - 1, interval_ms)
+
+      true ->
+        :timeout
+    end
+  end
+
   # Poll `fdbcli status json` until client.database_status.available is true,
   # or until we exhaust retries. Each probe gives fdbcli up to 10 s to connect
   # (-t 10); fdbcli always emits valid JSON even when the cluster is down, so
   # we parse the output rather than relying solely on the exit code.
   defp wait_for_database(cluster_file, retries \\ 30, interval_ms \\ 2_000) do
     available? =
-      case ExFdbmonitor.Fdbcli.exec(cluster_file, ["status", "json"], timeout: 10_000, stderr: false) do
+      case ExFdbmonitor.Fdbcli.exec(cluster_file, ["status", "json"],
+             timeout: 10_000,
+             stderr: false
+           ) do
         {_, props} ->
           stdout = props |> Keyword.get(:stdout, []) |> IO.iodata_to_binary()
+          decoded = JSON.decode(stdout)
+          available = match?({:ok, %{"client" => %{"database_status" => %{"available" => true}}}}, decoded)
+          Logger.notice("#{node()} status json available=#{available} decoded=#{inspect(decoded, limit: 5)}")
+          available
 
-          match?(
-            {:ok, %{"client" => %{"database_status" => %{"available" => true}}}},
-            JSON.decode(stdout)
-          )
-
-        _ ->
+        other ->
+          Logger.notice("#{node()} status json unexpected result: #{inspect(other, limit: 5)}")
           false
       end
 
@@ -273,7 +339,7 @@ defmodule ExFdbmonitor.Application do
         :ok
 
       retries > 0 ->
-        Logger.debug("#{node()} waiting for FDB cluster to become available...")
+        Logger.notice("#{node()} waiting for FDB cluster to become available (#{retries} retries left)...")
         Process.sleep(interval_ms)
         wait_for_database(cluster_file, retries - 1, interval_ms)
 
