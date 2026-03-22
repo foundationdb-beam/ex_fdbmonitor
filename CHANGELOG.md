@@ -6,11 +6,13 @@
 
 - Fixed `:crypto` and `:eex` missing from release by adding them to `extra_applications`.
 - Fixed `runtime.exs` network interface lookup to fall back to `iface0` (e.g. `lo0` on macOS).
-- Fixed FDB binary paths on Linux: defaults now resolve correctly for both Darwin and Linux via the new `ExFdbmonitor.Binaries` module.
+- Fixed `fdbcli` invocation passing an invalid `-t` flag; timeouts are now enforced via the erlexec receive timeout rather than a non-existent fdbcli flag.
+- Clearer error message when a node fails to start because it was registered under a different name during initial bootstrap.
 
 ### Improvements
 
-- Clearer error message when a node fails to start because it was registered under a different name during initial bootstrap.
+- Added `ExFdbmonitor.Binaries` module: centralises FDB binary path resolution with OS-aware defaults for Darwin and Linux, falling back to application config when set.
+- `ExFdbmonitor.Fdbcli.exec/3` gains a `:timeout` option (milliseconds) and a `:stderr` option for controlling which streams are captured.
 - Added GitHub Actions CI with lint and test jobs.
 
 ## v0.2.0 (2026-02-27)
