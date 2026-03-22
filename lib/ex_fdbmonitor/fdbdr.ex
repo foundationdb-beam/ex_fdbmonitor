@@ -11,7 +11,7 @@ defmodule ExFdbmonitor.Fdbdr do
   end
 
   defp exec(fdbdr, args) when is_list(args) do
-    cmd = [fdbdr] ++ args
+    cmd = Enum.map([fdbdr | args], &String.to_charlist/1)
 
     Logger.notice("fdbdr exec #{inspect(args)}")
 

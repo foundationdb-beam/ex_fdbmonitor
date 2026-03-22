@@ -26,7 +26,10 @@ defmodule ExFdbmonitor.Worker do
       raise "fdbmonitor binary not found at #{fdbmonitor_bin}"
     end
 
-    cmd = [fdbmonitor_bin, "--conffile", conffile, "--lockfile", lockfile]
+    cmd =
+      [fdbmonitor_bin, "--conffile", conffile, "--lockfile", lockfile]
+      |> Enum.map(&String.to_charlist/1)
+
     {:ok, pid, _os_pid} = :exec.run_link(cmd, [])
     {:ok, pid}
   end

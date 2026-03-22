@@ -36,6 +36,7 @@ defmodule ExFdbmonitor.Fdbcli do
   def exec(cluster_file, fdbcli_exec, opts) when is_list(fdbcli_exec) do
     cmd =
       [fdbcli(), "-C", cluster_file, "--exec", Enum.join(fdbcli_exec, " ")]
+      |> to_charlists()
 
     stderr_opts = if Keyword.get(opts, :stderr, true), do: [:stderr], else: []
     exec_opts = [:sync, :stdout] ++ stderr_opts
@@ -49,4 +50,6 @@ defmodule ExFdbmonitor.Fdbcli do
   def exec(cluster_file, fdbcli_exec, opts) do
     exec(cluster_file, String.split(fdbcli_exec, " "), opts)
   end
+
+  defp to_charlists(cmd), do: Enum.map(cmd, &String.to_charlist/1)
 end
