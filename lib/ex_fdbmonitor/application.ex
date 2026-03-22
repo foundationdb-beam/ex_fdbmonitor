@@ -9,29 +9,38 @@ defmodule ExFdbmonitor.Application do
 
   @impl true
   def start(_type, _args) do
-    children =
+    {children, bootstrap} =
       if worker?() do
         etc_dir = Application.fetch_env!(:ex_fdbmonitor, :etc_dir)
 
         # Phase 1: write config files before any processes start
         %Bootstrap{} = bootstrap = prepare_files(etc_dir)
 
-        [
+        children = [
           {DynamicSupervisor, name: ExFdbmonitor.DynamicSupervisor, strategy: :one_for_one},
           {ExFdbmonitor.Worker, []},
-          # Phase 2: run fdbcli commands and start MgmtServer (requires Worker running)
-          %{
-            id: :setup_cluster,
-            start: {__MODULE__, :setup_cluster, [bootstrap]},
-            restart: :temporary
-          }
+          {ExFdbmonitor.SetupCluster, bootstrap}
         ]
+
+        {children, bootstrap}
       else
-        []
+        {[], nil}
       end
 
-    opts = [strategy: :one_for_one, name: ExFdbmonitor.Supervisor]
-    Supervisor.start_link(children, opts)
+    # Use rest_for_one: if Worker dies, SetupCluster is terminated and
+    # restarted so it retries setup against the fresh Worker.
+    opts = [strategy: :rest_for_one, name: ExFdbmonitor.Supervisor]
+    {:ok, sup} = Supervisor.start_link(children, opts)
+
+    # Block until cluster setup is complete. The supervisor is alive and
+    # can restart Worker if it crashes. If Worker keeps crashing, the
+    # supervisor hits max_restart_intensity, crashes, and this call
+    # propagates the error — failing application startup.
+    if bootstrap do
+      :ok = ExFdbmonitor.SetupCluster.await()
+    end
+
+    {:ok, sup}
   end
 
   defp worker?() do
@@ -151,56 +160,6 @@ defmodule ExFdbmonitor.Application do
     end
   end
 
-  # Phase 2: run fdbcli commands, register node, and optionally set redundancy mode.
-  # Called as a child start function after Worker is running.
-  # Returns :ignore so the supervisor treats this as a completed one-shot.
-  @doc false
-  def setup_cluster(%Bootstrap{} = bootstrap) do
-    %Bootstrap{
-      cluster_file: cluster_file,
-      machine_id: machine_id,
-      fdbcli_cmds: fdbcli_cmds,
-      redundancy_mode: redundancy_mode,
-      fdbserver_ports: fdbserver_ports
-    } = bootstrap
-
-    wait_for_fdbserver(fdbserver_ports)
-
-    for cmd <- fdbcli_cmds do
-      case cmd do
-        ["configure", "new" | _] ->
-          Logger.notice("#{node()} fdbcli local exec #{inspect(cmd)}")
-          {:ok, [stdout: _]} = ExFdbmonitor.Fdbcli.exec(cluster_file, cmd)
-
-        _ ->
-          ensure_mgmt_server(cluster_file)
-          {:ok, [stdout: _]} = ExFdbmonitor.MgmtServer.exec(cmd)
-      end
-    end
-
-    ensure_mgmt_server(cluster_file)
-
-    if machine_id do
-      :ok = ExFdbmonitor.MgmtServer.register_node(machine_id, node())
-    end
-
-    case ExFdbmonitor.MgmtServer.scale_up(redundancy_mode, [node()]) do
-      :ok ->
-        :ok
-
-      {:error, {:unknown_nodes, nodes}} ->
-        raise """
-        Node #{inspect(hd(nodes))} is not registered in MgmtServer. \
-        This usually means either the initial bootstrap did not complete \
-        successfully, or the node name changed since the first boot. \
-        Clear the data directory and restart to re-bootstrap, or ensure \
-        the node is started with the same name it was originally registered with.\
-        """
-    end
-
-    :ignore
-  end
-
   defp check_config() do
     check_config? = Application.get_env(:ex_fdbmonitor, :check_config, true)
 
@@ -241,96 +200,5 @@ defmodule ExFdbmonitor.Application do
     end
 
     !already_started?
-  end
-
-  defp ensure_mgmt_server(cluster_file) do
-    case GenServer.whereis(ExFdbmonitor.MgmtServer) do
-      pid when is_pid(pid) ->
-        :ok
-
-      nil ->
-        :ok = wait_for_database(cluster_file)
-        db = :erlfdb.open(cluster_file)
-        root = :erlfdb_directory.root()
-        dir_name = Application.get_env(:ex_fdbmonitor, :dir, "ex_fdbmonitor")
-        dir = :erlfdb_directory.create_or_open(db, root, dir_name)
-
-        {:ok, _} =
-          DynamicSupervisor.start_child(
-            ExFdbmonitor.DynamicSupervisor,
-            {ExFdbmonitor.MgmtServer, {db, dir}}
-          )
-
-        :ok
-    end
-  end
-
-  # Wait for at least one fdbserver to accept TCP connections. fdbmonitor
-  # spawns fdbserver asynchronously after Worker.start_link returns, so on
-  # slower systems (e.g. CI) the server may not be listening yet when
-  # setup_cluster runs.
-  defp wait_for_fdbserver(ports, retries \\ 50, interval_ms \\ 200)
-  defp wait_for_fdbserver([], _retries, _interval_ms), do: :ok
-
-  defp wait_for_fdbserver(ports, retries, interval_ms) do
-    connected? =
-      Enum.any?(ports, fn port ->
-        case :gen_tcp.connect({127, 0, 0, 1}, port, [], 500) do
-          {:ok, sock} ->
-            :gen_tcp.close(sock)
-            true
-
-          {:error, _} ->
-            false
-        end
-      end)
-
-    cond do
-      connected? ->
-        :ok
-
-      retries > 0 ->
-        Process.sleep(interval_ms)
-        wait_for_fdbserver(ports, retries - 1, interval_ms)
-
-      true ->
-        raise "fdbserver not reachable on any of ports #{inspect(ports)} within 10s"
-    end
-  end
-
-  # Poll `fdbcli status json` until client.database_status.available is true,
-  # or until we exhaust retries. Each probe gives fdbcli up to 10 s to connect
-  # (-t 10); fdbcli always emits valid JSON even when the cluster is down, so
-  # we parse the output rather than relying solely on the exit code.
-  defp wait_for_database(cluster_file, retries \\ 30, interval_ms \\ 2_000) do
-    available? =
-      case ExFdbmonitor.Fdbcli.exec(cluster_file, ["status", "json"],
-             timeout: 10_000,
-             stderr: false
-           ) do
-        {_, props} ->
-          stdout = props |> Keyword.get(:stdout, []) |> IO.iodata_to_binary()
-
-          match?(
-            {:ok, %{"client" => %{"database_status" => %{"available" => true}}}},
-            JSON.decode(stdout)
-          )
-
-        _ ->
-          false
-      end
-
-    cond do
-      available? ->
-        :ok
-
-      retries > 0 ->
-        Logger.debug("#{node()} waiting for FDB cluster to become available...")
-        Process.sleep(interval_ms)
-        wait_for_database(cluster_file, retries - 1, interval_ms)
-
-      true ->
-        raise "FDB cluster at #{cluster_file} did not become available."
-    end
   end
 end

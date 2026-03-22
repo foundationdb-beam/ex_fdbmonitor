@@ -12,7 +12,7 @@ defmodule ExFdbmonitor.MixProject do
       aliases: aliases(),
       dialyzer: [
         ignore_warnings: ".dialyzer_ignore.exs",
-        plt_add_apps: [:erlexec, :dgen]
+        plt_add_apps: [:erlexec, :dgen, :os_mon]
       ],
       package: package(),
       docs: docs()
