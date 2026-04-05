@@ -37,8 +37,8 @@ defmodule ExFdbmonitor.MixProject do
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.16", only: :dev, runtime: false},
-      {:erlfdb, "~> 0.3"},
-      {:dgen, "~> 0.1"}
+      {:erlfdb, "~> 1.0"},
+      {:dgen, "~> 0.2"}
     ]
   end
 

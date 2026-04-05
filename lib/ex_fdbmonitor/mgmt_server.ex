@@ -21,7 +21,11 @@ defmodule ExFdbmonitor.MgmtServer do
   @mode_order %{"single" => 1, "double" => 2, "triple" => 3}
 
   def start_link({db, dir}) do
-    DGenServer.start_link(__MODULE__, [], name: __MODULE__, tenant: {db, dir})
+    DGenServer.start_link(__MODULE__, [],
+      name: __MODULE__,
+      tenant: {db, dir},
+      dead_letter_threshold: :infinity
+    )
   end
 
   @doc """

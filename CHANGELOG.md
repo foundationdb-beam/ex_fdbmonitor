@@ -1,12 +1,11 @@
 # Changelog
 
-## v0.2.1 (TBD)
+## v0.2.1 (2026-04-05)
 
 ### Fixes
 
 - Fixed `:crypto` and `:eex` missing from release by adding them to `extra_applications`.
 - Fixed `runtime.exs` network interface lookup to fall back to `iface0` (e.g. `lo0` on macOS).
-- Fixed `fdbcli` invocation passing an invalid `-t` flag; timeouts are now enforced via the erlexec receive timeout rather than a non-existent fdbcli flag.
 - Clearer error message when a node fails to start because it was registered under a different name during initial bootstrap.
 - Fixed erlexec command arguments to pass charlists instead of binaries, matching the declared `cmd()` type spec. This resolved all dialyzer `no_return` warnings and removed the need for any dialyzer ignore entries.
 
