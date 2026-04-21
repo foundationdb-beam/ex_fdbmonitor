@@ -40,7 +40,7 @@ defmodule ExFdbmonitor do
   @doc """
   Gracefully remove the current node from the cluster.
 
-  Executes `MgmtServer.scale_down/1` which, under the DGenServer lock:
+  Executes `MgmtServer.scale_down/1` which, under the DGen.Server lock:
 
   1. Downgrades the redundancy mode if the remaining nodes can no longer
      sustain it (e.g. triple → double when dropping below 5 nodes).

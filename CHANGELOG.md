@@ -2,18 +2,23 @@
 
 ## v0.2.1 (2026-04-05)
 
-### Fixes
+### Bug Fixes
 
 - Fixed `:crypto` and `:eex` missing from release by adding them to `extra_applications`.
 - Fixed `runtime.exs` network interface lookup to fall back to `iface0` (e.g. `lo0` on macOS).
 - Clearer error message when a node fails to start because it was registered under a different name during initial bootstrap.
 - Fixed erlexec command arguments to pass charlists instead of binaries, matching the declared `cmd()` type spec. This resolved all dialyzer `no_return` warnings and removed the need for any dialyzer ignore entries.
 
-### Improvements
+### Enhancements
 
 - Added `ExFdbmonitor.Binaries` module: centralises FDB binary path resolution with OS-aware defaults for Darwin and Linux, falling back to application config when set.
 - `ExFdbmonitor.Fdbcli.exec/3` gains a `:timeout` option (milliseconds) and a `:stderr` option for controlling which streams are captured.
 - Added GitHub Actions CI with lint and test jobs.
+
+### Dependencies
+
+- Updated erlfdb to 1.1
+- Updated dgen to main branch (pending release of 0.3)
 
 ## v0.2.0 (2026-02-27)
 

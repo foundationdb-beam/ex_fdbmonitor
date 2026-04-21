@@ -38,7 +38,7 @@ defmodule ExFdbmonitor.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.16", only: :dev, runtime: false},
       {:erlfdb, "~> 1.0"},
-      {:dgen, "~> 0.2"}
+      {:dgen, github: "foundationdb-beam/dgen"}
     ]
   end
 

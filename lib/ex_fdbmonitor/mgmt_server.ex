@@ -2,14 +2,14 @@ require Logger
 
 defmodule ExFdbmonitor.MgmtServer do
   @moduledoc """
-  A DGenServer that serializes actions across all nodes.
+  A DGen.Server that serializes actions across all nodes.
 
-  Nodes submit fdbcli commands via `exec/1`. The DGenServer processes
+  Nodes submit fdbcli commands via `exec/1`. The DGen.Server processes
   them one at a time, ensuring commands from different nodes don't
   interleave on a cluster that is still being configured.
   """
 
-  use DGenServer
+  use DGen.Server
 
   defstruct nodes: %{}, redundancy_mode: nil
 
@@ -21,7 +21,7 @@ defmodule ExFdbmonitor.MgmtServer do
   @mode_order %{"single" => 1, "double" => 2, "triple" => 3}
 
   def start_link({db, dir}) do
-    DGenServer.start_link(__MODULE__, [],
+    DGen.Server.start_link(__MODULE__, [],
       name: __MODULE__,
       tenant: {db, dir},
       dead_letter_threshold: :infinity
@@ -32,21 +32,21 @@ defmodule ExFdbmonitor.MgmtServer do
   Execute `fdbcli_args` through the serialized server.
   """
   def exec(fdbcli_args) do
-    DGenServer.call(__MODULE__, {:exec, fdbcli_args}, :infinity)
+    DGen.Server.call(__MODULE__, {:exec, fdbcli_args}, :infinity)
   end
 
   @doc """
   Register a mapping from `machine_id` to `node_name` in the server state.
   """
   def register_node(machine_id, node_name) do
-    DGenServer.call(__MODULE__, {:register_node, machine_id, node_name}, :infinity)
+    DGen.Server.call(__MODULE__, {:register_node, machine_id, node_name}, :infinity)
   end
 
   @doc """
   Look up the machine_id for a given node name.
   """
   def get_machine_id(node_name) do
-    DGenServer.call(__MODULE__, {:get_machine_id, node_name}, :infinity)
+    DGen.Server.call(__MODULE__, {:get_machine_id, node_name}, :infinity)
   end
 
   @doc """
@@ -55,7 +55,7 @@ defmodule ExFdbmonitor.MgmtServer do
   Raises if the node has no registered machine_id.
   """
   def exclude(node_name) do
-    DGenServer.call(__MODULE__, {:exclude, node_name}, :infinity)
+    DGen.Server.call(__MODULE__, {:exclude, node_name}, :infinity)
   end
 
   @doc """
@@ -64,7 +64,7 @@ defmodule ExFdbmonitor.MgmtServer do
   Returns `{:error, {:unknown_node, node_name}}` if the node has no registered machine_id.
   """
   def include(node_name) do
-    DGenServer.call(__MODULE__, {:include, node_name}, :infinity)
+    DGen.Server.call(__MODULE__, {:include, node_name}, :infinity)
   end
 
   @doc """
@@ -72,7 +72,7 @@ defmodule ExFdbmonitor.MgmtServer do
 
   Automatically determines the appropriate redundancy mode for the
   surviving nodes and downgrades if necessary. Executes under the
-  DGenServer lock:
+  DGen.Server lock:
   1. `configure <mode>` (only if downgrade needed)
   2. Set coordinators to surviving nodes
   3. `exclude` each departing node (blocks until data moved)
@@ -81,7 +81,7 @@ defmodule ExFdbmonitor.MgmtServer do
   after this call returns.
   """
   def scale_down(nodes_to_exclude) do
-    DGenServer.call(__MODULE__, {:scale_down, nodes_to_exclude}, :infinity)
+    DGen.Server.call(__MODULE__, {:scale_down, nodes_to_exclude}, :infinity)
   end
 
   @doc """
@@ -99,10 +99,10 @@ defmodule ExFdbmonitor.MgmtServer do
   before the threshold is met are no-ops.
   """
   def scale_up(target_mode, nodes_to_include) do
-    DGenServer.call(__MODULE__, {:scale_up, target_mode, nodes_to_include}, :infinity)
+    DGen.Server.call(__MODULE__, {:scale_up, target_mode, nodes_to_include}, :infinity)
   end
 
-  # --- DGenServer callbacks ---
+  # --- DGen.Server callbacks ---
 
   @impl true
   def init([]), do: {:ok, @tuid, %__MODULE__{}}
@@ -182,13 +182,13 @@ defmodule ExFdbmonitor.MgmtServer do
   end
 
   @impl true
-  def handle_locked({:call, _from}, {:exec, fdbcli_args}, state) do
+  def handle_locked(_db_ctx, {:call, _from}, {:exec, fdbcli_args}, state) do
     Logger.notice("#{node()} fdbcli server exec #{inspect(fdbcli_args)}")
     result = ExFdbmonitor.Fdbcli.exec(fdbcli_args)
     {:reply, result, state}
   end
 
-  def handle_locked({:call, _from}, {:exclude, node_name}, state) do
+  def handle_locked(_db_ctx, {:call, _from}, {:exclude, node_name}, state) do
     machine_id = state.nodes[node_name]
     fdbcli_args = ["exclude", "locality_machineid:#{machine_id}"]
     Logger.notice("#{node()} fdbcli server exec #{inspect(fdbcli_args)}")
@@ -196,7 +196,7 @@ defmodule ExFdbmonitor.MgmtServer do
     {:reply, result, state}
   end
 
-  def handle_locked({:call, _from}, {:include, node_name}, state) do
+  def handle_locked(_db_ctx, {:call, _from}, {:include, node_name}, state) do
     machine_id = state.nodes[node_name]
     fdbcli_args = ["include", "locality_machineid:#{machine_id}"]
     Logger.notice("#{node()} fdbcli server exec #{inspect(fdbcli_args)}")
@@ -204,7 +204,7 @@ defmodule ExFdbmonitor.MgmtServer do
     {:reply, result, state}
   end
 
-  def handle_locked({:call, _from}, {:scale_down, nodes_to_exclude}, state) do
+  def handle_locked(_db_ctx, {:call, _from}, {:scale_down, nodes_to_exclude}, state) do
     surviving = Map.keys(state.nodes) -- nodes_to_exclude
     current = current_redundancy_mode()
     target = target_mode(length(surviving), state)
@@ -218,7 +218,7 @@ defmodule ExFdbmonitor.MgmtServer do
     end
   end
 
-  def handle_locked({:call, _from}, {:scale_up, _target_mode, nodes_to_include}, state) do
+  def handle_locked(_db_ctx, {:call, _from}, {:scale_up, _target_mode, nodes_to_include}, state) do
     mode = state.redundancy_mode
     current = current_redundancy_mode()
 
