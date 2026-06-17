@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.2 (2026-06-17)
+
+### Dependencies
+
+* Upgrade deps to latest
+
 ## v0.2.1 (2026-04-05)
 
 ### Bug Fixes
