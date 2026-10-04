@@ -43,6 +43,20 @@ defmodule ExFdbmonitor.Conf do
   end
 
   @doc """
+  Read this node's machine id, its `locality-machineid`, from its
+  foundationdb.conf. Returns `nil` if the conf file has none.
+  """
+  def read_machine_id do
+    etc_dir = Application.fetch_env!(:ex_fdbmonitor, :etc_dir)
+    conffile = Path.expand(Path.join([etc_dir, "foundationdb.conf"]))
+
+    case Regex.run(~r/^\s*locality-machineid\s*=\s*(\S+)\s*$/m, File.read!(conffile)) do
+      [_, machine_id] -> machine_id
+      nil -> nil
+    end
+  end
+
+  @doc """
   Read the fdbserver addresses from this node's foundationdb.conf and cluster file.
 
   Parses `[fdbserver.PORT]` sections from the conf file and extracts the IP

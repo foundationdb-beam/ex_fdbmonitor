@@ -5,7 +5,7 @@ defmodule ExFdbmonitor.MixProject do
     [
       app: :ex_fdbmonitor,
       description: "A tool for creating FoundationDB clusters",
-      version: "0.2.2",
+      version: "0.2.3",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -32,13 +32,13 @@ defmodule ExFdbmonitor.MixProject do
   defp deps do
     [
       {:global_flags, "~> 1.0"},
-      {:erlexec, "~> 2.0"},
+      {:erlexec, "~> 2.5"},
       {:local_cluster, "~> 2.0"},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.16", only: :dev, runtime: false},
-      {:erlfdb, "~> 1.0"},
-      {:dgen, "~> 0.3"}
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
+      {:erlfdb, "~> 1.2"},
+      {:dgen, "~> 0.4.2"}
     ]
   end
 

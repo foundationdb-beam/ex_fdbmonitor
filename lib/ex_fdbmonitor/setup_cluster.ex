@@ -87,6 +87,8 @@ defmodule ExFdbmonitor.SetupCluster do
 
     if machine_id do
       :ok = ExFdbmonitor.MgmtServer.register_node(machine_id, node())
+    else
+      adopt_unregistered_node()
     end
 
     case ExFdbmonitor.MgmtServer.scale_up(redundancy_mode, [node()]) do
@@ -102,6 +104,28 @@ defmodule ExFdbmonitor.SetupCluster do
         the node is started with the same name it was originally registered with.\
         """
     end
+  end
+
+  # A node registers its machine_id only when it bootstraps, so one in a
+  # cluster bootstrapped before MgmtServer existed was never registered.
+  # Register it now, by the machine_id in its own conf, unless that machine
+  # belongs to another node name, as when this node was renamed; then the
+  # scale_up that follows reports it unknown.
+  defp adopt_unregistered_node do
+    with :error <- ExFdbmonitor.MgmtServer.get_machine_id(node()),
+         machine_id when is_binary(machine_id) <- ExFdbmonitor.Conf.read_machine_id() do
+      case ExFdbmonitor.MgmtServer.adopt_node(machine_id, node()) do
+        :ok ->
+          Logger.notice("#{node()} registered in MgmtServer as machine #{machine_id}")
+
+        {:error, {:machine_id_taken, holder}} ->
+          Logger.warning(
+            "#{node()} not registered: machine #{machine_id} belongs to #{inspect(holder)}"
+          )
+      end
+    end
+
+    :ok
   end
 
   defp ensure_mgmt_server(cluster_file) do

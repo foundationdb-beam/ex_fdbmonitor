@@ -43,6 +43,19 @@ defmodule ExFdbmonitor.MgmtServer do
   end
 
   @doc """
+  Register `node_name` as the node for `machine_id`, unless that machine_id
+  already belongs to a different node.
+
+  For a node that was not registered at bootstrap, such as one in a cluster
+  bootstrapped before MgmtServer existed. Returns `:ok` if the node is now
+  registered, or was already, and `{:error, {:machine_id_taken, other_node}}`
+  if another node holds the machine_id, as when a node's name has changed.
+  """
+  def adopt_node(machine_id, node_name) do
+    DGen.Server.call(__MODULE__, {:adopt_node, machine_id, node_name}, :infinity)
+  end
+
+  @doc """
   Look up the machine_id for a given node name.
   """
   def get_machine_id(node_name) do
@@ -110,6 +123,24 @@ defmodule ExFdbmonitor.MgmtServer do
   @impl true
   def handle_call({:register_node, machine_id, node_name}, _from, state) do
     {:reply, :ok, %{state | nodes: Map.put(state.nodes, node_name, machine_id)}}
+  end
+
+  def handle_call({:adopt_node, machine_id, node_name}, _from, state) do
+    holder =
+      Enum.find_value(state.nodes, fn {node, id} ->
+        if id == machine_id and node != node_name, do: node
+      end)
+
+    cond do
+      Map.has_key?(state.nodes, node_name) ->
+        {:reply, :ok, state}
+
+      holder ->
+        {:reply, {:error, {:machine_id_taken, holder}}, state}
+
+      true ->
+        {:reply, :ok, %{state | nodes: Map.put(state.nodes, node_name, machine_id)}}
+    end
   end
 
   def handle_call({:get_machine_id, node_name}, _from, state) do

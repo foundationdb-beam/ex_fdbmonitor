@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.3 (2026-10-04)
+
+### Bug Fixes
+
+- A node in a cluster bootstrapped before MgmtServer existed was never registered, so it failed to start with "not registered in MgmtServer". On a start that is not a fresh bootstrap, an unregistered node now registers itself by the `locality-machineid` in its own `foundationdb.conf`. A node whose machine id belongs to another node name, as after a rename, still fails as before, with a warning naming that node.
+
+### Enhancements
+
+- Added `ExFdbmonitor.MgmtServer.adopt_node/2`, which registers a node unless its machine id already belongs to another node, and `ExFdbmonitor.Conf.read_machine_id/0`.
+
+### Dependencies
+
+- Require erlexec ~> 2.5, erlfdb ~> 1.2, dgen ~> 0.4.2 and ex_doc ~> 0.40.
+
 ## v0.2.2 (2026-06-17)
 
 ### Dependencies
